@@ -11,9 +11,12 @@ yellow() { echo -e "\e[1;33m$1\033[0m"; }
 purple() { echo -e "\e[1;35m$1\033[0m"; }
 reading() { read -p "$(red "$1")" "$2"; }
 export LC_ALL=C
+# 获取当前用户名
 USERNAME=$(whoami)
 HOSTNAME=$(hostname)
-export UUID=${UUID:-'bc97f674-c578-4940-9234-0a1da46041b9'}
+USER_HOME=$(readlink -f /home/$USERNAME) # 获取标准化的用户主目录
+FILE_PATH="$USER_HOME/.s5"
+export UUID=${UUID:-'5a7e211c-10fd-4a2d-909d-5958eb8bb663'}
 export NEZHA_SERVER=${NEZHA_SERVER:-''} 
 export NEZHA_PORT=${NEZHA_PORT:-'5555'}     
 export NEZHA_KEY=${NEZHA_KEY:-''} 
@@ -21,7 +24,8 @@ export ARGO_DOMAIN=${ARGO_DOMAIN:-''}
 export ARGO_AUTH=${ARGO_AUTH:-''}
 export CFIP=${CFIP:-'www.visa.com.tw'} 
 export CFPORT=${CFPORT:-'443'} 
-
+# 创建必要的目录，如果不存在
+[ ! -d "$FILE_PATH" ] && mkdir -p "$FILE_PATH"
 [[ "$HOSTNAME" == "s1.ct8.pl" ]] && WORKDIR="domains/${USERNAME}.ct8.pl/logs" || WORKDIR="domains/${USERNAME}.serv00.net/logs"
 [ -d "$WORKDIR" ] || (mkdir -p "$WORKDIR" && chmod 777 "$WORKDIR")
 ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
@@ -513,6 +517,87 @@ sleep 2
 rm -rf boot.log config.json sb.log core tunnel.yml tunnel.json fake_useragent_0.2.0.json
 }
 
+# 安装和配置 socks5
+socks5_config(){
+  # 提示用户输入 socks5 端口号
+  read -p "请输入 socks5 端口 (面板开放的TCP端口): " SOCKS5_PORT
+
+  # 提示用户输入用户名和密码
+  read -p "请输入 socks5 用户名: " SOCKS5_USER
+
+  while true; do
+    read -p "请输入 socks5 密码（不能包含@和:）：" SOCKS5_PASS
+    echo
+    if [[ "$SOCKS5_PASS" == *"@"* || "$SOCKS5_PASS" == *":"* ]]; then
+      echo "密码中不能包含@和:符号，请重新输入。"
+    else
+      break
+    fi
+  done
+
+  # config.js 文件
+  cat > "$FILE_PATH/config.json" << EOF
+{
+  "log": {
+    "access": "/dev/null",
+    "error": "/dev/null",
+    "loglevel": "none"
+  },
+  "inbounds": [
+    {
+      "port": "$SOCKS5_PORT",
+      "protocol": "socks",
+      "tag": "socks",
+      "settings": {
+        "auth": "password",
+        "udp": false,
+        "ip": "0.0.0.0",
+        "userLevel": 0,
+        "accounts": [
+          {
+            "user": "$SOCKS5_USER",
+            "pass": "$SOCKS5_PASS"
+          }
+        ]
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "direct",
+      "protocol": "freedom"
+    }
+  ]
+}
+EOF
+}
+
+install_socks5(){
+  socks5_config
+  if [[ ! -e "${FILE_PATH}/s5" ]]; then
+    curl -L -sS -o "${FILE_PATH}/s5" "https://github.com/eooce/test/releases/download/freebsd/web"
+  else
+    read -p "socks5 程序已存在，是否重新下载？(Y/N 回车N): " reinstall_socks5_answer
+    reinstall_socks5_answer=${reinstall_socks5_answer^^}
+    if [[ "$reinstall_socks5_answer" == "Y" ]]; then
+      curl -L -sS -o "${FILE_PATH}/s5" "https://github.com/eooce/test/releases/download/freebsd/web"
+    fi
+  fi
+  chmod +x "${FILE_PATH}/s5"
+  nohup "${FILE_PATH}/s5" -c "${FILE_PATH}/config.json" >/dev/null 2>&1 &
+  sleep 1
+  HOST_IP=$(get_ip)
+  sleep 1
+  if pgrep -x "s5" > /dev/null; then
+    echo -e "\e[1;32mSocks5 代理程序启动成功\e[0m"
+    echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32m$HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS\033[0m"
+	echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32msocks://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT\033[0m"
+  else
+    echo -e "\e[1;31mSocks5 代理程序启动失败\033[0m"
+  fi
+}
+
+
 menu() {
    clear
    echo ""
@@ -527,7 +612,9 @@ menu() {
    echo  "==============="
    green "3. 查看节点信息"
    echo  "==============="
-   yellow "4. 清理所有进程"
+   pink "4. 安装socks5"
+   echo  "==============="
+   yellow "5. 清理所有进程"
    echo  "==============="
    red "0. 退出脚本"
    echo "==========="
@@ -537,9 +624,10 @@ menu() {
         1) install_singbox ;;
         2) uninstall_singbox ;; 
         3) cat $WORKDIR/list.txt ;; 
-	4) kill_all_tasks ;;
+		4) install_socks5 ;;
+		5) kill_all_tasks ;;
         0) exit 0 ;;
-        *) red "无效的选项，请输入 0 到 4" ;;
+        *) red "无效的选项，请输入 0 到 5" ;;
     esac
 }
 menu
