@@ -618,7 +618,7 @@ menu() {
    echo  "==============="
    red "0. 退出脚本"
    echo "==========="
-   reading "请输入选择(0-3): " choice
+   reading "请输入选择(0-5): " choice
    echo ""
     case "${choice}" in
         1) install_singbox ;;
