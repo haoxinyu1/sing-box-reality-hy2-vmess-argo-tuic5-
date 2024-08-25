@@ -543,7 +543,6 @@ hysteria2://$UUID@$IP:$hy2_port/?sni=www.bing.com&alpn=h3&insecure=1#$ISP
 tuic://$UUID:admin123@$IP:$tuic_port?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#$ISP
 
 此脚本tuic协议无法使用，因为只有3个端口，让给了socks5
-
 EOF
   cat list.txt
   purple "\n$WORKDIR/list.txt saved successfully"
@@ -674,10 +673,9 @@ install_socks5(){
 
 socks5节点信息
 
-$HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS
+服务器IP：$HOST_IP 端口：$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS
 
 socks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT
-
 EOF
       else
         echo -e "\e[1;31mSocks5 代理程序启动失败\033[0m"
