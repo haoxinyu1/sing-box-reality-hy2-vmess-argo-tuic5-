@@ -666,14 +666,14 @@ install_socks5(){
         
         # 更新或创建 list.txt 文件
         cat >> "$WORKDIR/list.txt" <<EOF
-        
-        socks5节点信息
-        
-        $HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS
-        
-        socks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT
-        
-        EOF
+
+socks5节点信息
+
+$HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS
+
+socks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT
+
+EOF
       else
         echo -e "\e[1;31mSocks5 代理程序启动失败\033[0m"
       fi
