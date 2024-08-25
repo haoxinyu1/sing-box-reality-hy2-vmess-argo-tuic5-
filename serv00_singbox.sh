@@ -714,12 +714,15 @@ uninstall_socks5() {
 }
 
 run_sing_box() {
-  nohup $WORKDIR/web run -c ${WORKDIR}/config.json >/dev/null 2>&1 &  
-  nohup $WORKDIR/bot >/dev/null 2>&1 &
+  cd "$WORKDIR"
+  args="tunnel --edge-ip-version auto --no-autoupdate --protocol http2 --logfile boot.log --loglevel info --url http://localhost:35679"
+  nohup ./web run -c config.json >/dev/null 2>&1 & 
+  nohup ./bot $args >/dev/null 2>&1 &
 }
 
 run_socks5() {
-  nohup "${FILE_PATH}/s5" -c "${FILE_PATH}/config.json" >/dev/null 2>&1 &
+  cd "$FILE_PATH"
+  nohup ./s5 -c config.json >/dev/null 2>&1 &
 }
 
 menu() {
