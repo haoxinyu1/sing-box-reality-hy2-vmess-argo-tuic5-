@@ -128,8 +128,8 @@ generate_uuid() {
 }
 
 install_singbox() {
-    echo -e "${yellow}本脚本同时四协议共存${purple}(vmess-ws,vmess-ws-tls(argo),hysteria2,tuic)${re}"
-    echo -e "${yellow}开始运行前，请确保在面板${purple}已开放3个端口，一个tcp端口和两个udp端口${re}"
+    echo -e "${yellow}本脚本同时四协议共存${purple}(vmess-ws,vmess-ws-tls(argo),hysteria2,socks5)${re}"
+    echo -e "${yellow}开始运行前，请确保在面板${purple}已开放3个端口，一个udp端口和两个tcp端口${re}"
     echo -e "${yellow}面板${purple}Additional services中的Run your own applications${yellow}已开启为${purple}Enabled${yellow}状态${re}"
 
     # 读取用户选择
@@ -620,29 +620,33 @@ EOF
 }
 
 install_socks5(){
-  socks5_config
-  if [[ ! -e "${FILE_PATH}/s5" ]]; then
-    curl -L -sS -o "${FILE_PATH}/s5" "https://github.com/eooce/test/releases/download/freebsd/web"
-  else
-    read -p "socks5 程序已存在，是否重新下载？(Y/N 回车N): " reinstall_socks5_answer
-    reinstall_socks5_answer=${reinstall_socks5_answer^^}
-    if [[ "$reinstall_socks5_answer" == "Y" ]]; then
-      curl -L -sS -o "${FILE_PATH}/s5" "https://github.com/eooce/test/releases/download/freebsd/web"
-    fi
-  fi
-  chmod +x "${FILE_PATH}/s5"
-  nohup "${FILE_PATH}/s5" -c "${FILE_PATH}/config.json" >/dev/null 2>&1 &
-  sleep 1
-  HOST_IP=$(get_ip)
-  sleep 1
-  if pgrep -x "s5" > /dev/null; then
-    echo -e "\e[1;32mSocks5 代理程序启动成功\e[0m"
-    echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32m$HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS\033[0m"
-    echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32msocks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT\033[0m"
-    if [[ -e "$WORKDIR/list.txt" ]]; then
-      echo "socks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT" >> "$WORKDIR/list.txt"
-    else
-      cat > "$WORKDIR/list.txt" <<EOF
+  # 读取用户选择
+  read -p "\n是否安装SOCKS5？【y/n】: " choice
+  case "$choice" in
+    [Yy])
+      socks5_config
+      if [[ ! -e "${FILE_PATH}/s5" ]]; then
+        curl -L -sS -o "${FILE_PATH}/s5" "https://github.com/eooce/test/releases/download/freebsd/web"
+      else
+        read -p "socks5 程序已存在，是否重新下载？(Y/N 回车N): " reinstall_socks5_answer
+        reinstall_socks5_answer=${reinstall_socks5_answer^^}
+        if [[ "$reinstall_socks5_answer" == "Y" ]]; then
+          curl -L -sS -o "${FILE_PATH}/s5" "https://github.com/eooce/test/releases/download/freebsd/web"
+        fi
+      fi
+      chmod +x "${FILE_PATH}/s5"
+      nohup "${FILE_PATH}/s5" -c "${FILE_PATH}/config.json" >/dev/null 2>&1 &
+      sleep 1
+      HOST_IP=$(get_ip)
+      sleep 1
+      if pgrep -x "s5" > /dev/null; then
+        echo -e "\e[1;32mSocks5 代理程序启动成功\e[0m"
+        echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32m$HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS\033[0m"
+        echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32msocks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT\033[0m"
+        if [[ -e "$WORKDIR/list.txt" ]]; then
+          echo "socks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT" >> "$WORKDIR/list.txt"
+        else
+          cat > "$WORKDIR/list.txt" <<EOF
 socks5节点信息
 
 $HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS 
@@ -650,12 +654,20 @@ $HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS
 socks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT
 
 EOF
-    fi
-  else
-    echo -e "\e[1;31mSocks5 代理程序启动失败\033[0m"
-  fi
+        fi
+      else
+        echo -e "\e[1;31mSocks5 代理程序启动失败\033[0m"
+      fi
+      ;;
+    [Nn])
+      exit 0 
+      ;;
+    *) 
+      echo -e "\e[1;31m无效的选择，请输入y或n\033[0m"
+      menu  # 回到主菜单
+      ;;
+  esac
 }
-
 
 uninstall_socks5() {
   reading "\n确定要卸载吗？【y/n】: " choice
