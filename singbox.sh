@@ -11,8 +11,10 @@ yellow() { echo -e "\e[1;33m$1\033[0m"; }
 purple() { echo -e "\e[1;35m$1\033[0m"; }
 reading() { read -p "$(red "$1")" "$2"; }
 export LC_ALL=C
+# 获取当前用户名
 USERNAME=$(whoami)
 HOSTNAME=$(hostname)
+
 export UUID=${UUID:-'bc97f674-c578-4940-9234-0a1da46041b9'}
 export NEZHA_SERVER=${NEZHA_SERVER:-''} 
 export NEZHA_PORT=${NEZHA_PORT:-'5555'}     
@@ -22,9 +24,27 @@ export ARGO_AUTH=${ARGO_AUTH:-''}
 export CFIP=${CFIP:-'www.visa.com.tw'} 
 export CFPORT=${CFPORT:-'443'} 
 
-[[ "$HOSTNAME" == "s1.ct8.pl" ]] && WORKDIR="domains/${USERNAME}.ct8.pl/logs" || WORKDIR="domains/${USERNAME}.serv00.net/logs"
-[ -d "$WORKDIR" ] || (mkdir -p "$WORKDIR" && chmod 777 "$WORKDIR")
+# 设置工作目录和文件路径
+if [[ "$HOSTNAME" == "s1.ct8.pl" ]]; then
+    WORKDIR="domains/${USERNAME}.ct8.pl/singbox"
+    FILE_PATH="domains/${USERNAME}.ct8.pl/socks5"
+else
+    WORKDIR="domains/${USERNAME}.serv00.net/singbox"
+    FILE_PATH="domains/${USERNAME}.serv00.net/socks5"
+fi
+
+# 确保工作目录存在且权限设置正确
+if [ ! -d "$WORKDIR" ]; then
+    mkdir -p "$WORKDIR" && chmod 777 "$WORKDIR"
+fi
+
+# 确保文件路径存在且权限设置正确
+if [ ! -d "$FILE_PATH" ]; then
+    mkdir -p "$FILE_PATH" && chmod 777 "$FILE_PATH"
+fi
+
 ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
+
 
 read_vmess_port() {
     while true; do
@@ -80,26 +100,18 @@ read_nz_variables() {
   fi
 }
 
+
 install_singbox() {
-echo -e "${yellow}本脚本同时四协议共存${purple}(vmess-ws,vmess-ws-tls(argo),hysteria2,tuic)${re}"
-echo -e "${yellow}开始运行前，请确保在面板${purple}已开放3个端口，一个tcp端口和两个udp端口${re}"
-echo -e "${yellow}面板${purple}Additional services中的Run your own applications${yellow}已开启为${purplw}Enabled${yellow}状态${re}"
-reading "\n确定继续安装吗？【y/n】: " choice
-  case "$choice" in
-    [Yy])
-        cd $WORKDIR
-        read_nz_variables
-        read_vmess_port
-        read_hy2_port
-        read_tuic_port
-        argo_configure
-        generate_config
-        download_singbox
-        get_links
-      ;;
-    [Nn]) exit 0 ;;
-    *) red "无效的选择，请输入y或n" && menu ;;
-  esac
+	cd "$WORKDIR" || { red "无法切换到工作目录 $WORKDIR，退出安装。"; exit 1; }  # 确保目录切换成功
+	# read_nz_variables  # 读取 nz 变量 (已注释，未使用)
+	read_vmess_port   # 读取 VMess 端口
+	read_hy2_port     # 读取 Hysteria2 端口
+	# read_tuic_port   # 读取 TUIC 端口 (已注释，未使用)
+	argo_configure    # 配置 Argo 隧道
+	generate_config   # 生成配置文件
+	download_singbox  # 下载 SingBox 并启动
+	set_links         # 写入相关链接和信息
+	install_socks5    # 安装socks5
 }
 
 uninstall_singbox() {
@@ -124,22 +136,19 @@ reading "\n清理所有进程将退出ssh连接，确定继续清理吗？【y/n
   esac
 }
 
+kill_tasks() {
+reading "\n清理所有进程，确定继续清理吗？【y/n】: " choice
+  case "$choice" in
+    [Yy]) ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null ;;
+       *) menu ;;
+  esac
+}
+
 # Generating argo Config
 argo_configure() {
   if [[ -z $ARGO_AUTH || -z $ARGO_DOMAIN ]]; then
-      reading "是否需要使用固定argo隧道？【y/n】: " argo_choice
-      [[ -z $argo_choice ]] && return
-      [[ "$argo_choice" != "y" && "$argo_choice" != "Y" && "$argo_choice" != "n" && "$argo_choice" != "N" ]] && { red "无效的选择，请输入y或n"; return; }
-      if [[ "$argo_choice" == "y" || "$argo_choice" == "Y" ]]; then
-          reading "请输入argo固定隧道域名: " ARGO_DOMAIN
-          green "你的argo固定隧道域名为: $ARGO_DOMAIN"
-          reading "请输入argo固定隧道密钥（Json或Token）: " ARGO_AUTH
-          green "你的argo固定隧道密钥为: $ARGO_AUTH"
-	  echo -e "${red}注意：${purple}使用token，需要在cloudflare后台设置隧道端口和面板开放的tcp端口一致${re}"
-      else
-          green "ARGO隧道变量未设置，将使用临时隧道"
-          return
-      fi
+      green "ARGO隧道变量未设置，将使用临时隧道"
+      return
   fi
 
   if [[ $ARGO_AUTH =~ TunnelSecret ]]; then
@@ -243,27 +252,6 @@ generate_config() {
       "type": "ws",
       "path": "/vmess",
       "early_data_header_name": "Sec-WebSocket-Protocol"
-      }
-    },
-    {
-      "tag": "tuic-in",
-      "type": "tuic",
-      "listen": "::",
-      "listen_port": $tuic_port,
-      "users": [
-        {
-          "uuid": "$UUID",
-          "password": "admin123"
-        }
-      ],
-      "congestion_control": "bbr",
-      "tls": {
-        "enabled": true,
-        "alpn": [
-          "h3"
-        ],
-        "certificate_path": "cert.pem",
-        "key_path": "private.key"
       }
     }
 
@@ -409,8 +397,8 @@ download_with_fallback() {
 
 for entry in "${FILE_INFO[@]}"; do
     URL=$(echo "$entry" | cut -d ' ' -f 1)
-    RANDOM_NAME=$(generate_random_name)
-    NEW_FILENAME="$DOWNLOAD_DIR/$RANDOM_NAME"
+    FIXED_NAME=$(echo "$entry" | cut -d ' ' -f 2) # 使用文件信息中的固定名称
+    NEW_FILENAME="$DOWNLOAD_DIR/$FIXED_NAME"
     
     if [ -e "$NEW_FILENAME" ]; then
         echo -e "\e[1;32m$NEW_FILENAME already exists, Skipping download\e[0m"
@@ -419,8 +407,9 @@ for entry in "${FILE_INFO[@]}"; do
     fi
     
     chmod +x "$NEW_FILENAME"
-    FILE_MAP[$(echo "$entry" | cut -d ' ' -f 2)]="$NEW_FILENAME"
+    FILE_MAP[$FIXED_NAME]="$NEW_FILENAME" # 使用固定名称作为键
 done
+
 wait
 
 if [ -e "$(basename ${FILE_MAP[npm]})" ]; then
@@ -459,7 +448,7 @@ if [ -e "$(basename ${FILE_MAP[bot]})" ]; then
     pgrep -x "$(basename ${FILE_MAP[bot]})" > /dev/null && green "$(basename ${FILE_MAP[bot]}) is running" || { red "$(basename ${FILE_MAP[bot]}) is not running, restarting..."; pkill -x "$(basename ${FILE_MAP[bot]})" && nohup ./"$(basename ${FILE_MAP[bot]})" "${args}" >/dev/null 2>&1 & sleep 2; purple "$(basename ${FILE_MAP[bot]}) restarted"; }
 fi
 sleep 5
-rm -f "$(basename ${FILE_MAP[npm]})" "$(basename ${FILE_MAP[web]})" "$(basename ${FILE_MAP[bot]})"
+# rm -f "$(basename ${FILE_MAP[npm]})" "$(basename ${FILE_MAP[web]})" "$(basename ${FILE_MAP[bot]})"
 }
 
 get_argodomain() {
@@ -489,15 +478,15 @@ get_ip() {
   echo "$ip"
 }
 
-get_links(){
-argodomain=$(get_argodomain)
-echo -e "\e[1;32mArgoDomain:\e[1;35m${argodomain}\e[0m\n"
-sleep 1
-IP=$(get_ip)
-ISP=$(curl -s https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18}' | sed -e 's/ /_/g') 
-sleep 1
-yellow "注意：v2ray或其他软件的跳过证书验证需设置为true,否则hy2或tuic节点可能不通\n"
-cat > list.txt <<EOF
+set_links(){
+  argodomain=$(get_argodomain)
+  echo -e "\e[1;32mArgoDomain:\e[1;35m${argodomain}\e[0m\n"
+  sleep 1
+  IP=$(get_ip)
+  ISP=$(curl -s https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18}' | sed -e 's/ /_/g') 
+  sleep 1
+  yellow "注意：v2ray或其他软件的跳过证书验证需设置为true,否则hy2或tuic节点可能不通\n"
+  cat >> list.txt <<EOF
 vmess://$(echo "{ \"v\": \"2\", \"ps\": \"$ISP\", \"add\": \"$IP\", \"port\": \"$vmess_port\", \"id\": \"$UUID\", \"aid\": \"0\", \"scy\": \"none\", \"net\": \"ws\", \"type\": \"none\", \"host\": \"\", \"path\": \"/vmess?ed=2048\", \"tls\": \"\", \"sni\": \"\", \"alpn\": \"\", \"fp\": \"\"}" | base64 -w0)
 
 vmess://$(echo "{ \"v\": \"2\", \"ps\": \"$ISP\", \"add\": \"$CFIP\", \"port\": \"$CFPORT\", \"id\": \"$UUID\", \"aid\": \"0\", \"scy\": \"none\", \"net\": \"ws\", \"type\": \"none\", \"host\": \"$argodomain\", \"path\": \"/vmess?ed=2048\", \"tls\": \"tls\", \"sni\": \"$argodomain\", \"alpn\": \"\", \"fp\": \"\"}" | base64 -w0)
@@ -505,41 +494,124 @@ vmess://$(echo "{ \"v\": \"2\", \"ps\": \"$ISP\", \"add\": \"$CFIP\", \"port\": 
 hysteria2://$UUID@$IP:$hy2_port/?sni=www.bing.com&alpn=h3&insecure=1#$ISP
 
 tuic://$UUID:admin123@$IP:$tuic_port?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#$ISP
+
+此脚本tuic协议无法使用，因为只有3个端口，让给了socks5
 EOF
-cat list.txt
-purple "\n$WORKDIR/list.txt saved successfully"
-purple "Running done!"
-sleep 2
-rm -rf boot.log config.json sb.log core tunnel.yml tunnel.json fake_useragent_0.2.0.json
+  cat list.txt
+  purple "\n$WORKDIR/list.txt saved successfully"
+  purple "Running done!"
+  sleep 2
+  # rm -rf boot.log config.json sb.log core tunnel.yml tunnel.json fake_useragent_0.2.0.json
 }
 
-menu() {
-   clear
-   echo ""
-   purple "=== Serv00|ct8老王sing-box一键四合一安装脚本 ===\n"
-   echo -e "${green}脚本地址：${re}${yellow}https://github.com/eooce/Sing-box${re}\n"
-   echo -e "${green}反馈论坛：${re}${yellow}https://bbs.vps8.me${re}\n"
-   echo -e "${green}TG反馈群组：${re}${yellow}https://t.me/vps888${re}\n"
-   purple "转载请著名出处，请勿滥用\n"
-   green "1. 安装sing-box"
-   echo  "==============="
-   red "2. 卸载sing-box"
-   echo  "==============="
-   green "3. 查看节点信息"
-   echo  "==============="
-   yellow "4. 清理所有进程"
-   echo  "==============="
-   red "0. 退出脚本"
-   echo "==========="
-   reading "请输入选择(0-3): " choice
-   echo ""
-    case "${choice}" in
-        1) install_singbox ;;
-        2) uninstall_singbox ;; 
-        3) cat $WORKDIR/list.txt ;; 
-	4) kill_all_tasks ;;
-        0) exit 0 ;;
-        *) red "无效的选项，请输入 0 到 4" ;;
-    esac
+# 安装和配置 socks5
+socks5_config(){
+  # 提示用户输入 socks5 端口号
+  read -p "请输入 socks5 端口 (面板开放的TCP端口): " SOCKS5_PORT
+
+  # 提示用户输入用户名和密码
+  read -p "请输入 socks5 用户名: " SOCKS5_USER
+
+  while true; do
+    read -p "请输入 socks5 密码（不能包含@和:）：" SOCKS5_PASS
+    echo
+    if [[ "$SOCKS5_PASS" == *"@"* || "$SOCKS5_PASS" == *":"* ]]; then
+      echo "密码中不能包含@和:符号，请重新输入。"
+    else
+      break
+    fi
+  done
+
+  # config.js 文件
+  cat > "$FILE_PATH/config.json" << EOF
+{
+  "log": {
+    "access": "/dev/null",
+    "error": "/dev/null",
+    "loglevel": "none"
+  },
+  "inbounds": [
+    {
+      "port": "$SOCKS5_PORT",
+      "protocol": "socks",
+      "tag": "socks",
+      "settings": {
+        "auth": "password",
+        "udp": false,
+        "ip": "0.0.0.0",
+        "userLevel": 0,
+        "accounts": [
+          {
+            "user": "$SOCKS5_USER",
+            "pass": "$SOCKS5_PASS"
+          }
+        ]
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "direct",
+      "protocol": "freedom"
+    }
+  ]
 }
-menu
+EOF
+}
+
+install_socks5(){
+
+  # 设置工作目录和文件路径
+  if [[ "$HOSTNAME" == "s1.ct8.pl" ]]; then
+	FILE_PATH="domains/${USERNAME}.ct8.pl/socks5"
+  else
+	FILE_PATH="domains/${USERNAME}.serv00.net/socks5"
+  fi
+  
+  # 确保文件路径存在且权限设置正确
+  mkdir -p "$FILE_PATH" && chmod 777 "$FILE_PATH"
+
+  # 进行 socks5 配置
+  socks5_config
+
+  # 下载或更新 socks5 程序
+  if [[ ! -e "${FILE_PATH}/s5" ]]; then
+	curl -L -sS -o "${FILE_PATH}/s5" "https://github.com/eooce/test/releases/download/freebsd/web"
+  else
+	read -p "socks5 程序已存在，是否重新下载？(Y/N 回车N): " reinstall_socks5_answer
+	reinstall_socks5_answer=${reinstall_socks5_answer^^}
+	if [[ "$reinstall_socks5_answer" == "Y" ]]; then
+	  curl -L -sS -o "${FILE_PATH}/s5" "https://github.com/eooce/test/releases/download/freebsd/web"
+	fi
+  fi
+
+  # 设置执行权限并启动 socks5 程序
+  chmod +x "${FILE_PATH}/s5"
+  nohup "${FILE_PATH}/s5" -c "${FILE_PATH}/config.json" >/dev/null 2>&1 &
+  sleep 1
+
+  # 获取主机 IP
+  HOST_IP=$(get_ip)
+  sleep 1
+
+  # 检查 socks5 程序是否成功启动
+  if pgrep -x "s5" > /dev/null; then
+	echo -e "\e[1;32mSocks5 代理程序启动成功\e[0m"
+	echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32m$HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS\033[0m"
+	echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32msocks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT\033[0m"
+	
+	# 更新或创建 list.txt 文件
+	cat >> "list.txt" <<EOF
+
+socks5节点信息
+
+服务器IP：$HOST_IP 端口：$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS
+
+socks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT
+EOF
+  else
+	echo -e "\e[1;31mSocks5 代理程序启动失败\033[0m"
+  fi
+}
+
+install_singbox
