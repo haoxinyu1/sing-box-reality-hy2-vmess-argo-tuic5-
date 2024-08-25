@@ -714,7 +714,8 @@ uninstall_socks5() {
 }
 
 run_sing_box() {
-  nohup $WORKDIR/web run -c ${WORKDIR}/config.json >/dev/null 2>&1 & && nohup $WORKDIR/bot >/dev/null 2>&1 &
+  nohup $WORKDIR/web run -c ${WORKDIR}/config.json >/dev/null 2>&1 &  
+  nohup $WORKDIR/bot >/dev/null 2>&1 &
 }
 
 run_socks5() {
