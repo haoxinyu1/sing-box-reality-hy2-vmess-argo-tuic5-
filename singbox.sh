@@ -24,6 +24,8 @@ export ARGO_AUTH=${ARGO_AUTH:-''}
 export CFIP=${CFIP:-'www.visa.com.tw'} 
 export CFPORT=${CFPORT:-'443'} 
 
+ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
+
 # 设置工作目录和文件路径
 if [[ "$HOSTNAME" == "s1.ct8.pl" ]]; then
     WORKDIR="domains/${USERNAME}.ct8.pl/singbox"
@@ -36,15 +38,18 @@ fi
 # 确保工作目录存在且权限设置正确
 if [ ! -d "$WORKDIR" ]; then
     mkdir -p "$WORKDIR" && chmod 777 "$WORKDIR"
+else
+    rm -rf $WORKDIR
+    mkdir -p "$WORKDIR" && chmod 777 "$WORKDIR"
 fi
 
 # 确保文件路径存在且权限设置正确
 if [ ! -d "$FILE_PATH" ]; then
     mkdir -p "$FILE_PATH" && chmod 777 "$FILE_PATH"
+else
+    rm -rf $FILE_PATH
+    mkdir -p "$FILE_PATH" && chmod 777 "$FILE_PATH"
 fi
-
-ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
-
 
 read_vmess_port() {
     while true; do
@@ -448,7 +453,7 @@ if [ -e "$(basename ${FILE_MAP[bot]})" ]; then
     pgrep -x "$(basename ${FILE_MAP[bot]})" > /dev/null && green "$(basename ${FILE_MAP[bot]}) is running" || { red "$(basename ${FILE_MAP[bot]}) is not running, restarting..."; pkill -x "$(basename ${FILE_MAP[bot]})" && nohup ./"$(basename ${FILE_MAP[bot]})" "${args}" >/dev/null 2>&1 & sleep 2; purple "$(basename ${FILE_MAP[bot]}) restarted"; }
 fi
 sleep 5
-# rm -f "$(basename ${FILE_MAP[npm]})" "$(basename ${FILE_MAP[web]})" "$(basename ${FILE_MAP[bot]})"
+rm -f "$(basename ${FILE_MAP[npm]})" "$(basename ${FILE_MAP[web]})" "$(basename ${FILE_MAP[bot]})"
 }
 
 get_argodomain() {
@@ -501,7 +506,7 @@ EOF
   purple "\n$WORKDIR/list.txt saved successfully"
   purple "Running done!"
   sleep 2
-  # rm -rf boot.log config.json sb.log core tunnel.yml tunnel.json fake_useragent_0.2.0.json
+  rm -rf boot.log config.json sb.log core tunnel.yml tunnel.json fake_useragent_0.2.0.json
 }
 
 # 安装和配置 socks5
