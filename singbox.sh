@@ -26,6 +26,8 @@ export CFPORT=${CFPORT:-'443'}
 
 ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
 
+#!/bin/bash
+
 # 设置工作目录和文件路径
 if [[ "$HOSTNAME" == "s1.ct8.pl" ]]; then
     WORKDIR="domains/${USERNAME}.ct8.pl/singbox"
@@ -35,21 +37,38 @@ else
     FILE_PATH="domains/${USERNAME}.serv00.net/socks5"
 fi
 
-# 确保工作目录存在且权限设置正确
-if [ ! -d "$WORKDIR" ]; then
-    mkdir -p "$WORKDIR" && chmod 777 "$WORKDIR"
-else
-    rm -rf $WORKDIR
-    mkdir -p "$WORKDIR" && chmod 777 "$WORKDIR"
+# 删除并重新创建工作目录
+if [ -d "$WORKDIR" ]; then
+    echo "Deleting existing WORKDIR: $WORKDIR"
+    rm -rfv "$WORKDIR"
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to delete WORKDIR: $WORKDIR"
+        exit 1
+    fi
 fi
+mkdir -p "$WORKDIR" && chmod 777 "$WORKDIR"
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to create WORKDIR: $WORKDIR"
+    exit 1
+fi
+echo "Successfully created WORKDIR: $WORKDIR"
 
-# 确保文件路径存在且权限设置正确
-if [ ! -d "$FILE_PATH" ]; then
-    mkdir -p "$FILE_PATH" && chmod 777 "$FILE_PATH"
-else
-    rm -rf $FILE_PATH
-    mkdir -p "$FILE_PATH" && chmod 777 "$FILE_PATH"
+# 删除并重新创建文件路径
+if [ -d "$FILE_PATH" ]; then
+    echo "Deleting existing FILE_PATH: $FILE_PATH"
+    rm -rfv "$FILE_PATH"
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to delete FILE_PATH: $FILE_PATH"
+        exit 1
+    fi
 fi
+mkdir -p "$FILE_PATH" && chmod 777 "$FILE_PATH"
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to create FILE_PATH: $FILE_PATH"
+    exit 1
+fi
+echo "Successfully created FILE_PATH: $FILE_PATH"
+
 
 read_vmess_port() {
     while true; do
