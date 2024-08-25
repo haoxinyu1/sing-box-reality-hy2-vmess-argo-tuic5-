@@ -553,7 +553,7 @@ vmess://$(echo "{ \"v\": \"2\", \"ps\": \"$ISP\", \"add\": \"$CFIP\", \"port\": 
 
 hysteria2://$UUID@$IP:$hy2_port/?sni=www.bing.com&alpn=h3&insecure=1#$ISP
 
-tuic://$UUID:admin123@$IP:$tuic_port?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#$ISP
+tuic://$UUID:admin123@$IP:$tuic_port?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#$ISP 此脚本tuic协议无法使用，因为只有3个端口，让给了socks5
 EOF
   fi
 
@@ -633,9 +633,7 @@ install_socks5(){
       fi
       
       # 确保文件路径存在且权限设置正确
-      if [ ! -d "$FILE_PATH" ]; then
-        mkdir -p "$FILE_PATH" && chmod 777 "$FILE_PATH"
-      fi
+      mkdir -p "$FILE_PATH" && chmod 777 "$FILE_PATH"
 
       # 进行 socks5 配置
       socks5_config
@@ -667,20 +665,15 @@ install_socks5(){
         echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32msocks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT\033[0m"
         
         # 更新或创建 list.txt 文件
-        if [[ -e "$WORKDIR/list.txt" ]]; then
-          echo -e "\n\nsocks5节点信息\n" >> "$WORKDIR/list.txt"
-          echo -e "\n$HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS\n" >> "$WORKDIR/list.txt"
-          echo -e "\nsocks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT\n" >> "$WORKDIR/list.txt"
-        else
-          cat > "$WORKDIR/list.txt" <<EOF
-socks5节点信息
-
-$HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS 
-
-socks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT
-
-EOF
-        fi
+        cat >> "$WORKDIR/list.txt" <<EOF
+        
+        socks5节点信息
+        
+        $HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS
+        
+        socks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT
+        
+        EOF
       else
         echo -e "\e[1;31mSocks5 代理程序启动失败\033[0m"
       fi
@@ -694,7 +687,6 @@ EOF
       ;;
   esac
 }
-
 
 uninstall_socks5() {
   reading "\n确定要卸载吗？【y/n】: " choice
