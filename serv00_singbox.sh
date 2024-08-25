@@ -43,7 +43,7 @@ if [ ! -d "$FILE_PATH" ]; then
     mkdir -p "$FILE_PATH" && chmod 777 "$FILE_PATH"
 fi
 
-ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
+# ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
 
 
 read_vmess_port() {
