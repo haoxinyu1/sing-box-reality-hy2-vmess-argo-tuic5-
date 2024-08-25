@@ -358,25 +358,26 @@ EOF
 # Download Dependency Files
 download_singbox() {
 
-# 定义要下载的文件和重命名后的文件名
-URL="https://github.com/eooce/test/releases/download/freebsd/sb"
-NEW_FILENAME="web"
+    # 定义要下载的文件和重命名后的文件名
+    URL="https://github.com/eooce/test/releases/download/freebsd/sb"
+    NEW_FILENAME="web"
 
-# 下载文件到工作目录并重命名
-curl -L -o "$WORKDIR/$NEW_FILENAME" "$URL"
+    # 下载文件到工作目录并重命名，等待下载完成后继续
+    curl -L --silent --show-error --fail -o "$WORKDIR/$NEW_FILENAME" "$URL"
+    
+    # 检查文件是否存在，并赋予可执行权限
+    if [ -f "$WORKDIR/$NEW_FILENAME" ]; then
+        chmod +x "$WORKDIR/$NEW_FILENAME"
+        echo "$NEW_FILENAME downloaded and made executable."
 
-# 检查文件是否存在，并赋予可执行权限
-if [ -f "$WORKDIR/$NEW_FILENAME" ]; then
-    chmod +x "$WORKDIR/$NEW_FILENAME"
-    echo "$NEW_FILENAME downloaded and made executable."
-
-    # 启动进程
-    nohup "$WORKDIR/$NEW_FILENAME" >/dev/null 2>&1 &
-    echo "$NEW_FILENAME 启动成功."
-else
-    echo "$NEW_FILENAME 文件不存在."
-fi
+        # 启动进程
+        nohup "$WORKDIR/$NEW_FILENAME" >/dev/null 2>&1 &
+        echo "$NEW_FILENAME 启动成功."
+    else
+        echo "$NEW_FILENAME 文件不存在."
+    fi
 }
+
 
 get_argodomain() {
   # 检查变量 ARGO_AUTH 是否非空（即是否已设置）
