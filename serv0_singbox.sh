@@ -536,10 +536,16 @@ get_links(){
   echo -e "\e[1;32mArgoDomain:\e[1;35m${argodomain}\e[0m\n"
   sleep 1
   IP=$(get_ip)
-  ISP=$(curl -s https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18}' | sed -e 's/ /_/g') 
+  ISP=$(curl -s https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18}' | sed -e 's/ /_/g')
   sleep 1
   yellow "注意：v2ray或其他软件的跳过证书验证需设置为true,否则hy2或tuic节点可能不通\n"
-  
+
+  # 确保 list.txt 文件路径存在
+  if [ ! -f "$WORKDIR/list.txt" ]; then
+      echo "创建新的 list.txt"
+      touch "$WORKDIR/list.txt"
+  fi
+
   # 临时文件
   temp_file=$(mktemp)
 
@@ -556,10 +562,10 @@ EOF
 
   # 检查是否存在信息，并根据情况覆盖内容
   if grep -q -e 'vmess://' -e 'hysteria2://' -e 'tuic://' "$WORKDIR/list.txt"; then
-    echo "Overwriting existing list.txt with new content"
+    echo "覆盖现有的 list.txt"
     cp "$temp_file" "$WORKDIR/list.txt"
   else
-    echo "Creating new list.txt"
+    echo "追加到现有的 list.txt"
     cat "$temp_file" >> "$WORKDIR/list.txt"
   fi
 
@@ -567,11 +573,12 @@ EOF
   rm "$temp_file"
 
   cat "$WORKDIR/list.txt"
-  purple "\n$WORKDIR/list.txt saved successfully"
-  purple "Running done!"
+  purple "\n$WORKDIR/list.txt 保存成功"
+  purple "运行完成！"
   sleep 2
   # rm -rf boot.log config.json sb.log core tunnel.yml tunnel.json fake_useragent_0.2.0.json
 }
+
 
 
 # 安装和配置 socks5
