@@ -26,6 +26,7 @@ export CFPORT=${CFPORT:-'443'}
 [ -d "$WORKDIR" ] || (mkdir -p "$WORKDIR" && chmod 777 "$WORKDIR")
 ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
 
+
 read_vmess_port() {
     while true; do
         reading "请输入vmess端口 (面板开放的tcp端口): " vmess_port
@@ -80,26 +81,61 @@ read_nz_variables() {
   fi
 }
 
+# UUID 生成函数
+generate_uuid() {
+    for i in {1..3}; do
+        uuid=$(uuidgen)
+        if [[ -n "$uuid" ]]; then
+            echo "$uuid"
+            return
+        fi
+    done
+
+    # 预定义的UUID列表
+    predefined_uuids=(
+        "fb210b24-46dd-4b4c-92ce-097385945dad"
+        "53cfcb07-8c25-4c25-baaa-95b4b50871a2"
+        "445ae56f-727d-495e-9c88-cbe942d144a6"
+        "078eb39d-2094-4272-b221-782ba0520dd6"
+        "5826e9cc-c5b7-49ca-8b37-a0ea68f382cc"
+        "e79fda4a-9519-4ef3-8973-130801b3d0ae"
+        "c0422b3b-00aa-4dbe-8573-6fb15d49e557"
+        "907e3ac9-02de-47fe-b40c-c2bd912c3adf"
+        "c53ca34c-8d9c-4a7e-8b44-5da52e4b5eaa"
+        "73fc0a2d-2458-435b-92aa-b4e8e3e40944"
+    )
+    uuid=${predefined_uuids[$RANDOM % ${#predefined_uuids[@]}]}
+    echo "$uuid"
+}
+
 install_singbox() {
-echo -e "${yellow}本脚本同时四协议共存${purple}(vmess-ws,vmess-ws-tls(argo),hysteria2,tuic)${re}"
-echo -e "${yellow}开始运行前，请确保在面板${purple}已开放3个端口，一个tcp端口和两个udp端口${re}"
-echo -e "${yellow}面板${purple}Additional services中的Run your own applications${yellow}已开启为${purplw}Enabled${yellow}状态${re}"
-reading "\n确定继续安装吗？【y/n】: " choice
-  case "$choice" in
-    [Yy])
-        cd $WORKDIR
-        # read_nz_variables
-        read_vmess_port
-        read_hy2_port
-        # read_tuic_port
-        argo_configure
-        generate_config
-        download_singbox
-        get_links
-      ;;
-    [Nn]) exit 0 ;;
-    *) red "无效的选择，请输入y或n" && menu ;;
-  esac
+    echo -e "${yellow}本脚本同时四协议共存${purple}(vmess-ws,vmess-ws-tls(argo),hysteria2,tuic)${re}"
+    echo -e "${yellow}开始运行前，请确保在面板${purple}已开放3个端口，一个tcp端口和两个udp端口${re}"
+    echo -e "${yellow}面板${purple}Additional services中的Run your own applications${yellow}已开启为${purple}Enabled${yellow}状态${re}"
+
+    # 读取用户选择
+    reading "\n确定继续安装吗？【y/n】: " choice
+    case "$choice" in
+        [Yy])
+            UUID=$(generate_uuid)  # 生成 UUID 并赋值给 UUID 变量
+            cd "$WORKDIR" || { red "无法切换到工作目录 $WORKDIR，退出安装。"; exit 1; }  # 确保目录切换成功
+            # read_nz_variables  # 读取 nz 变量 (已注释，未使用)
+            read_vmess_port   # 读取 VMess 端口
+            read_hy2_port     # 读取 Hysteria2 端口
+            # read_tuic_port   # 读取 TUIC 端口 (已注释，未使用)
+            argo_configure    # 配置 Argo 隧道
+            generate_config   # 生成配置文件
+            download_singbox  # 下载 SingBox 并启动
+            get_links         # 获取相关链接和信息
+            ;;
+        [Nn]) 
+            exit 0 
+            ;;
+        *) 
+            red "无效的选择，请输入y或n" 
+            menu  # 回到主菜单
+            ;;
+    esac
 }
 
 uninstall_singbox() {
@@ -493,6 +529,100 @@ sleep 2
 # rm -rf boot.log config.json sb.log core tunnel.yml tunnel.json fake_useragent_0.2.0.json
 }
 
+# 安装和配置 socks5
+socks5_config(){
+  # 提示用户输入 socks5 端口号
+  read -p "请输入 socks5 端口 (面板开放的TCP端口): " SOCKS5_PORT
+
+  # 提示用户输入用户名和密码
+  read -p "请输入 socks5 用户名: " SOCKS5_USER
+
+  while true; do
+    read -p "请输入 socks5 密码（不能包含@和:）：" SOCKS5_PASS
+    echo
+    if [[ "$SOCKS5_PASS" == *"@"* || "$SOCKS5_PASS" == *":"* ]]; then
+      echo "密码中不能包含@和:符号，请重新输入。"
+    else
+      break
+    fi
+  done
+
+  # config.js 文件
+  cat > "$FILE_PATH/config.json" << EOF
+{
+  "log": {
+    "access": "/dev/null",
+    "error": "/dev/null",
+    "loglevel": "none"
+  },
+  "inbounds": [
+    {
+      "port": "$SOCKS5_PORT",
+      "protocol": "socks",
+      "tag": "socks",
+      "settings": {
+        "auth": "password",
+        "udp": false,
+        "ip": "0.0.0.0",
+        "userLevel": 0,
+        "accounts": [
+          {
+            "user": "$SOCKS5_USER",
+            "pass": "$SOCKS5_PASS"
+          }
+        ]
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "direct",
+      "protocol": "freedom"
+    }
+  ]
+}
+EOF
+}
+
+install_socks5(){
+  socks5_config
+  if [[ ! -e "${FILE_PATH}/s5" ]]; then
+    curl -L -sS -o "${FILE_PATH}/s5" "https://github.com/eooce/test/releases/download/freebsd/web"
+  else
+    read -p "socks5 程序已存在，是否重新下载？(Y/N 回车N): " reinstall_socks5_answer
+    reinstall_socks5_answer=${reinstall_socks5_answer^^}
+    if [[ "$reinstall_socks5_answer" == "Y" ]]; then
+      curl -L -sS -o "${FILE_PATH}/s5" "https://github.com/eooce/test/releases/download/freebsd/web"
+    fi
+  fi
+  chmod +x "${FILE_PATH}/s5"
+  nohup "${FILE_PATH}/s5" -c "${FILE_PATH}/config.json" >/dev/null 2>&1 &
+  sleep 1
+  HOST_IP=$(get_ip)
+  sleep 1
+  if pgrep -x "s5" > /dev/null; then
+    echo -e "\e[1;32mSocks5 代理程序启动成功\e[0m"
+    echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32m$HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS\033[0m"
+	echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32msocks://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT\033[0m"
+  else
+    echo -e "\e[1;31mSocks5 代理程序启动失败\033[0m"
+  fi
+}
+
+uninstall_socks5() {
+  reading "\n确定要卸载吗？【y/n】: " choice
+    case "$choice" in
+        [Yy])
+	      ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
+       	      rm -rf $FILE_PATH
+	      clear
+       	      green “socks5已完全卸载”
+          ;;
+        [Nn]) exit 0 ;;
+    	  *) red "无效的选择，请输入y或n" && menu ;;
+    esac
+}
+
 menu() {
    clear
    echo ""
@@ -507,19 +637,25 @@ menu() {
    echo  "==============="
    green "3. 查看节点信息"
    echo  "==============="
-   yellow "4. 清理所有进程"
+   green "4. 安装socks5"
+   echo  "==============="
+   red "5. 卸载socks5"
+   echo  "==============="
+   yellow "6. 清理所有进程"
    echo  "==============="
    red "0. 退出脚本"
    echo "==========="
-   reading "请输入选择(0-3): " choice
+   reading "请输入选择(0-6): " choice
    echo ""
     case "${choice}" in
         1) install_singbox ;;
         2) uninstall_singbox ;; 
         3) cat $WORKDIR/list.txt ;; 
-	4) kill_all_tasks ;;
+		4) install_socks5 ;;
+		5) uninstall_socks5 ;;
+		6) kill_all_tasks ;;
         0) exit 0 ;;
-        *) red "无效的选项，请输入 0 到 4" ;;
+        *) red "无效的选项，请输入 0 到 6" ;;
     esac
 }
 menu
