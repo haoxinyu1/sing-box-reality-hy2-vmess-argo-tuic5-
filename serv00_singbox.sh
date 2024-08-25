@@ -623,6 +623,9 @@ install_socks5(){
     echo -e "\e[1;32mSocks5 代理程序启动成功\e[0m"
     echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32m$HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS\033[0m"
     echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32msocks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT\033[0m"
+    cat > $WORKDIR/list.txt <<EOF
+    socks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT
+    EOF
   else
     echo -e "\e[1;31mSocks5 代理程序启动失败\033[0m"
   fi
