@@ -525,14 +525,27 @@ get_ip() {
 }
 
 get_links(){
-argodomain=$(get_argodomain)
-echo -e "\e[1;32mArgoDomain:\e[1;35m${argodomain}\e[0m\n"
-sleep 1
-IP=$(get_ip)
-ISP=$(curl -s https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18}' | sed -e 's/ /_/g') 
-sleep 1
-yellow "注意：v2ray或其他软件的跳过证书验证需设置为true,否则hy2或tuic节点可能不通\n"
-cat > list.txt <<EOF
+  argodomain=$(get_argodomain)
+  echo -e "\e[1;32mArgoDomain:\e[1;35m${argodomain}\e[0m\n"
+  sleep 1
+  IP=$(get_ip)
+  ISP=$(curl -s https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18}' | sed -e 's/ /_/g') 
+  sleep 1
+  yellow "注意：v2ray或其他软件的跳过证书验证需设置为true,否则hy2或tuic节点可能不通\n"
+  
+  if [[ -e "list.txt" ]]; then
+    cat >> list.txt <<EOF
+vmess://$(echo "{ \"v\": \"2\", \"ps\": \"$ISP\", \"add\": \"$IP\", \"port\": \"$vmess_port\", \"id\": \"$UUID\", \"aid\": \"0\", \"scy\": \"none\", \"net\": \"ws\", \"type\": \"none\", \"host\": \"\", \"path\": \"/vmess?ed=2048\", \"tls\": \"\", \"sni\": \"\", \"alpn\": \"\", \"fp\": \"\"}" | base64 -w0)
+
+vmess://$(echo "{ \"v\": \"2\", \"ps\": \"$ISP\", \"add\": \"$CFIP\", \"port\": \"$CFPORT\", \"id\": \"$UUID\", \"aid\": \"0\", \"scy\": \"none\", \"net\": \"ws\", \"type\": \"none\", \"host\": \"$argodomain\", \"path\": \"/vmess?ed=2048\", \"tls\": \"tls\", \"sni\": \"$argodomain\", \"alpn\": \"\", \"fp\": \"\"}" | base64 -w0)
+
+hysteria2://$UUID@$IP:$hy2_port/?sni=www.bing.com&alpn=h3&insecure=1#$ISP
+
+tuic://$UUID:admin123@$IP:$tuic_port?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#$ISP 此脚本tuic协议无法使用，因为只有3个端口，让给了socks5
+
+EOF
+  else
+    cat > list.txt <<EOF
 vmess://$(echo "{ \"v\": \"2\", \"ps\": \"$ISP\", \"add\": \"$IP\", \"port\": \"$vmess_port\", \"id\": \"$UUID\", \"aid\": \"0\", \"scy\": \"none\", \"net\": \"ws\", \"type\": \"none\", \"host\": \"\", \"path\": \"/vmess?ed=2048\", \"tls\": \"\", \"sni\": \"\", \"alpn\": \"\", \"fp\": \"\"}" | base64 -w0)
 
 vmess://$(echo "{ \"v\": \"2\", \"ps\": \"$ISP\", \"add\": \"$CFIP\", \"port\": \"$CFPORT\", \"id\": \"$UUID\", \"aid\": \"0\", \"scy\": \"none\", \"net\": \"ws\", \"type\": \"none\", \"host\": \"$argodomain\", \"path\": \"/vmess?ed=2048\", \"tls\": \"tls\", \"sni\": \"$argodomain\", \"alpn\": \"\", \"fp\": \"\"}" | base64 -w0)
@@ -541,12 +554,15 @@ hysteria2://$UUID@$IP:$hy2_port/?sni=www.bing.com&alpn=h3&insecure=1#$ISP
 
 tuic://$UUID:admin123@$IP:$tuic_port?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#$ISP
 EOF
-cat list.txt
-purple "\n$WORKDIR/list.txt saved successfully"
-purple "Running done!"
-sleep 2
-# rm -rf boot.log config.json sb.log core tunnel.yml tunnel.json fake_useragent_0.2.0.json
+  fi
+
+  cat list.txt
+  purple "\n$WORKDIR/list.txt saved successfully"
+  purple "Running done!"
+  sleep 2
+  # rm -rf boot.log config.json sb.log core tunnel.yml tunnel.json fake_useragent_0.2.0.json
 }
+
 
 # 安装和配置 socks5
 socks5_config(){
@@ -627,7 +643,12 @@ install_socks5(){
       echo "socks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT" >> "$WORKDIR/list.txt"
     else
       cat > "$WORKDIR/list.txt" <<EOF
+socks5节点信息
+
+$HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS 
+
 socks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT
+
 EOF
     fi
   else
