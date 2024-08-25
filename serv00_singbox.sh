@@ -623,13 +623,18 @@ install_socks5(){
     echo -e "\e[1;32mSocks5 代理程序启动成功\e[0m"
     echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32m$HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS\033[0m"
     echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32msocks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT\033[0m"
-    cat > $WORKDIR/list.txt <<EOF
-    socks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT
-    EOF
+    if [[ -e "$WORKDIR/list.txt" ]]; then
+      echo "socks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT" >> "$WORKDIR/list.txt"
+    else
+      cat > "$WORKDIR/list.txt" <<EOF
+socks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT
+EOF
+    fi
   else
     echo -e "\e[1;31mSocks5 代理程序启动失败\033[0m"
   fi
 }
+
 
 uninstall_socks5() {
   reading "\n确定要卸载吗？【y/n】: " choice
