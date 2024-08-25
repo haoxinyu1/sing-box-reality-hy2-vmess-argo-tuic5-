@@ -605,24 +605,55 @@ EOF
 
 install_socks5(){
   socks5_config
+
+  # 检查并下载socks5程序
   if [[ ! -e "${FILE_PATH}/s5" ]]; then
+    echo "正在下载 socks5 程序..."
     curl -L -sS -o "${FILE_PATH}/s5" "https://github.com/eooce/test/releases/download/freebsd/web"
   else
     read -p "socks5 程序已存在，是否重新下载？(Y/N 回车N): " reinstall_socks5_answer
     reinstall_socks5_answer=${reinstall_socks5_answer^^}
     if [[ "$reinstall_socks5_answer" == "Y" ]]; then
+      echo "重新下载 socks5 程序..."
       curl -L -sS -o "${FILE_PATH}/s5" "https://github.com/eooce/test/releases/download/freebsd/web"
     fi
   fi
+
+  # 确保程序有执行权限
   chmod +x "${FILE_PATH}/s5"
+
+  # 启动 socks5 程序
   nohup "${FILE_PATH}/s5" -c "${FILE_PATH}/config.json" >/dev/null 2>&1 &
   sleep 1
+
+  # 获取主机IP地址
   HOST_IP=$(get_ip)
   sleep 1
+
+  # 检查 socks5 程序是否成功启动
   if pgrep -x "s5" > /dev/null; then
     echo -e "\e[1;32mSocks5 代理程序启动成功\e[0m"
-    echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32m$HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS\033[0m"
-	echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32msocks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT\033[0m"
+
+    # 生成代理信息
+    PROXY_INFO="Socks5 代理地址：$HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS"
+    PROXY_URL="socks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT"
+
+    # 检查 list.txt 文件路径是否存在，如果不存在则创建
+    if [ ! -f "$WORKDIR/list.txt" ]; then
+        echo "创建新的 list.txt"
+        touch "$WORKDIR/list.txt"
+        chmod 777 "$WORKDIR/list.txt"
+    fi
+
+    # 将代理信息写入 list.txt 文件
+    echo -e "$PROXY_INFO\n$PROXY_URL" >> "$WORKDIR/list.txt"
+
+    # 显示保存的内容
+    cat "$WORKDIR/list.txt"
+
+    # 提示保存成功
+    purple "\n$WORKDIR/list.txt 保存成功"
+    purple "操作完成！"
   else
     echo -e "\e[1;31mSocks5 代理程序启动失败\033[0m"
   fi
