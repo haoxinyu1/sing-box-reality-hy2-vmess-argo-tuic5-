@@ -715,7 +715,7 @@ uninstall_socks5() {
 
 run_sing_box() {
   cd "$WORKDIR"
-  args="tunnel --edge-ip-version auto --no-autoupdate --protocol http2 --logfile boot.log --loglevel info --url http://localhost:35679"
+  args="tunnel --edge-ip-version auto --config tunnel.yml run"
   nohup ./web run -c config.json >/dev/null 2>&1 & 
   nohup ./bot $args >/dev/null 2>&1 &
 }
