@@ -23,7 +23,35 @@ export ARGO_DOMAIN=${ARGO_DOMAIN:-''}
 export ARGO_AUTH=${ARGO_AUTH:-''}
 export CFIP=${CFIP:-'www.visa.com.tw'} 
 export CFPORT=${CFPORT:-'443'} 
+# 设置工作目录和文件路径
+if [[ "$HOSTNAME" == "s1.ct8.pl" ]]; then
+    WORKDIR="domains/${USERNAME}.ct8.pl/singbox"
+    FILE_PATH="domains/${USERNAME}.ct8.pl/socks5"
+else
+    WORKDIR="domains/${USERNAME}.serv00.net/singbox"
+    FILE_PATH="domains/${USERNAME}.serv00.net/socks5"
+fi
 
+# 确保工作目录存在且权限设置正确
+if [ ! -d "$WORKDIR" ]; then
+    echo "目录 $WORKDIR 不存在，正在创建..."
+    mkdir -p "$WORKDIR" && chmod 777 "$WORKDIR"
+    echo "目录 $WORKDIR 已创建，权限设置为 777。"
+else
+    echo "目录 $WORKDIR 已存在。"
+fi
+
+# 确保文件路径存在且权限设置正确
+if [ ! -d "$FILE_PATH" ]; then
+    echo "目录 $FILE_PATH 不存在，正在创建..."
+    mkdir -p "$FILE_PATH" && chmod 777 "$FILE_PATH"
+    echo "目录 $FILE_PATH 已创建，权限设置为 777。"
+else
+    echo "目录 $FILE_PATH 已存在。"
+fi
+
+
+ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
 
 read_vmess_port() {
     while true; do
@@ -652,35 +680,7 @@ uninstall_socks5() {
     	  *) red "无效的选择，请输入y或n" && menu ;;
     esac
 }
-# 设置工作目录和文件路径
-if [[ "$HOSTNAME" == "s1.ct8.pl" ]]; then
-    WORKDIR="domains/${USERNAME}.ct8.pl/singbox"
-    FILE_PATH="domains/${USERNAME}.ct8.pl/socks5"
-else
-    WORKDIR="domains/${USERNAME}.serv00.net/singbox"
-    FILE_PATH="domains/${USERNAME}.serv00.net/socks5"
-fi
 
-# 确保工作目录存在且权限设置正确
-if [ ! -d "$WORKDIR" ]; then
-    echo "目录 $WORKDIR 不存在，正在创建..."
-    mkdir -p "$WORKDIR" && chmod 777 "$WORKDIR"
-    echo "目录 $WORKDIR 已创建，权限设置为 777。"
-else
-    echo "目录 $WORKDIR 已存在。"
-fi
-
-# 确保文件路径存在且权限设置正确
-if [ ! -d "$FILE_PATH" ]; then
-    echo "目录 $FILE_PATH 不存在，正在创建..."
-    mkdir -p "$FILE_PATH" && chmod 777 "$FILE_PATH"
-    echo "目录 $FILE_PATH 已创建，权限设置为 777。"
-else
-    echo "目录 $FILE_PATH 已存在。"
-fi
-
-
-ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
 
 menu() {
    clear
