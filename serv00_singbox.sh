@@ -180,6 +180,14 @@ reading "\n清理所有进程将退出ssh连接，确定继续清理吗？【y/n
   esac
 }
 
+kill_tasks() {
+reading "\n清理所有进程，确定继续清理吗？【y/n】: " choice
+  case "$choice" in
+    [Yy]) ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null ;;
+       *) menu ;;
+  esac
+}
+
 # Generating argo Config
 argo_configure() {
   if [[ -z $ARGO_AUTH || -z $ARGO_DOMAIN ]]; then
@@ -705,6 +713,14 @@ uninstall_socks5() {
     esac
 }
 
+run_sing_box() {
+  nohup $WORKDIR/web run -c ${WORKDIR}/config.json >/dev/null 2>&1 & && nohup $WORKDIR/bot >/dev/null 2>&1 &
+}
+
+run_socks5() {
+  nohup "${FILE_PATH}/s5" -c "${FILE_PATH}/config.json" >/dev/null 2>&1 &
+}
+
 menu() {
    clear
    echo ""
@@ -717,27 +733,36 @@ menu() {
    echo  "==============="
    red "2. 卸载sing-box"
    echo  "==============="
-   green "3. 查看节点信息"
+   green "3. 运行sing-box"
    echo  "==============="
    green "4. 安装socks5"
    echo  "==============="
-   red "5. 卸载socks5"
+   green "5. 卸载socks5"
    echo  "==============="
-   yellow "6. 清理所有进程"
+   red "6. 运行socks5"
+   echo  "==============="
+   yellow "7. 清理所有进程并推出SSH"
+   echo  "==============="
+   yellow "8. 清理所有进程"
+   echo  "==============="
+   green "9. 查看节点信息"
    echo  "==============="
    red "0. 退出脚本"
    echo "==========="
-   reading "请输入选择(0-6): " choice
+   reading "请输入选择(0-8): " choice
    echo ""
     case "${choice}" in
         1) install_singbox ;;
         2) uninstall_singbox ;; 
-        3) cat $WORKDIR/list.txt ;; 
+        3) run_sing_box ;; 
 		4) install_socks5 ;;
 		5) uninstall_socks5 ;;
-		6) kill_all_tasks ;;
+		6) run_socks5 ;;
+		7) kill_all_tasks ;;
+		8) kill_tasks ;;
+		9) get_links ;;
         0) exit 0 ;;
-        *) red "无效的选项，请输入 0 到 6" ;;
+        *) red "无效的选项，请输入 0 到 8" ;;
     esac
 }
 menu
