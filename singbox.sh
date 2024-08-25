@@ -11,12 +11,9 @@ yellow() { echo -e "\e[1;33m$1\033[0m"; }
 purple() { echo -e "\e[1;35m$1\033[0m"; }
 reading() { read -p "$(red "$1")" "$2"; }
 export LC_ALL=C
-# 获取当前用户名
 USERNAME=$(whoami)
 HOSTNAME=$(hostname)
-USER_HOME=$(readlink -f /home/$USERNAME) # 获取标准化的用户主目录
-FILE_PATH="$USER_HOME/.s5"
-export UUID=${UUID:-'5a7e211c-10fd-4a2d-909d-5958eb8bb663'}
+export UUID=${UUID:-'bc97f674-c578-4940-9234-0a1da46041b9'}
 export NEZHA_SERVER=${NEZHA_SERVER:-''} 
 export NEZHA_PORT=${NEZHA_PORT:-'5555'}     
 export NEZHA_KEY=${NEZHA_KEY:-''} 
@@ -24,37 +21,10 @@ export ARGO_DOMAIN=${ARGO_DOMAIN:-''}
 export ARGO_AUTH=${ARGO_AUTH:-''}
 export CFIP=${CFIP:-'www.visa.com.tw'} 
 export CFPORT=${CFPORT:-'443'} 
-# 创建必要的目录，如果不存在
-[ ! -d "$FILE_PATH" ] && mkdir -p "$FILE_PATH"
+
 [[ "$HOSTNAME" == "s1.ct8.pl" ]] && WORKDIR="domains/${USERNAME}.ct8.pl/singbox" || WORKDIR="domains/${USERNAME}.serv00.net/singbox"
 [ -d "$WORKDIR" ] || (mkdir -p "$WORKDIR" && chmod 777 "$WORKDIR")
 ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
-UUID=$(generate_uuid)
-generate_uuid() {
-    for i in {1..3}; do
-        uuid=$(uuidgen)
-        if [[ -n "$uuid" ]]; then
-            echo "$uuid"
-            return
-        fi
-    done
-
-    # 预定义的UUID列表
-    predefined_uuids=(
-        "fb210b24-46dd-4b4c-92ce-097385945dad"
-        "53cfcb07-8c25-4c25-baaa-95b4b50871a2"
-        "445ae56f-727d-495e-9c88-cbe942d144a6"
-        "078eb39d-2094-4272-b221-782ba0520dd6"
-        "5826e9cc-c5b7-49ca-8b37-a0ea68f382cc"
-        "e79fda4a-9519-4ef3-8973-130801b3d0ae"
-        "c0422b3b-00aa-4dbe-8573-6fb15d49e557"
-        "907e3ac9-02de-47fe-b40c-c2bd912c3adf"
-        "c53ca34c-8d9c-4a7e-8b44-5da52e4b5eaa"
-        "73fc0a2d-2458-435b-92aa-b4e8e3e40944"
-    )
-    uuid=${predefined_uuids[$RANDOM % ${#predefined_uuids[@]}]}
-    echo "$uuid"
-}
 
 read_vmess_port() {
     while true; do
@@ -92,7 +62,23 @@ read_tuic_port() {
     done
 }
 
-
+read_nz_variables() {
+  if [ -n "$NEZHA_SERVER" ] && [ -n "$NEZHA_PORT" ] && [ -n "$NEZHA_KEY" ]; then
+      green "使用自定义变量哪吒运行哪吒探针"
+      return
+  else
+      reading "是否需要安装哪吒探针？【y/n】: " nz_choice
+      [[ -z $nz_choice ]] && return
+      [[ "$nz_choice" != "y" && "$nz_choice" != "Y" ]] && return
+      reading "请输入哪吒探针域名或ip：" NEZHA_SERVER
+      green "你的哪吒域名为: $NEZHA_SERVER"
+      reading "请输入哪吒探针端口（回车跳过默认使用5555）：" NEZHA_PORT
+      [[ -z $NEZHA_PORT ]] && NEZHA_PORT="5555"
+      green "你的哪吒端口为: $NEZHA_PORT"
+      reading "请输入哪吒探针密钥：" NEZHA_KEY
+      green "你的哪吒密钥为: $NEZHA_KEY"
+  fi
+}
 
 install_singbox() {
 echo -e "${yellow}本脚本同时四协议共存${purple}(vmess-ws,vmess-ws-tls(argo),hysteria2,tuic)${re}"
@@ -102,8 +88,10 @@ reading "\n确定继续安装吗？【y/n】: " choice
   case "$choice" in
     [Yy])
         cd $WORKDIR
+        # read_nz_variables
         read_vmess_port
         read_hy2_port
+        # read_tuic_port
         argo_configure
         generate_config
         download_singbox
@@ -357,70 +345,129 @@ EOF
 
 # Download Dependency Files
 download_singbox() {
+  ARCH=$(uname -m) && DOWNLOAD_DIR="." && mkdir -p "$DOWNLOAD_DIR" && FILE_INFO=()
+  if [ "$ARCH" == "arm" ] || [ "$ARCH" == "arm64" ] || [ "$ARCH" == "aarch64" ]; then
+      FILE_INFO=("https://github.com/eooce/test/releases/download/arm64/sb web" "https://github.com/eooce/test/releases/download/arm64/bot13 bot" "https://github.com/eooce/test/releases/download/ARM/swith npm")
+  elif [ "$ARCH" == "amd64" ] || [ "$ARCH" == "x86_64" ] || [ "$ARCH" == "x86" ]; then
+      FILE_INFO=("https://github.com/eooce/test/releases/download/freebsd/sb web" "https://github.com/eooce/test/releases/download/freebsd/server bot" "https://github.com/eooce/test/releases/download/freebsd/npm npm")
+  else
+      echo "Unsupported architecture: $ARCH"
+      exit 1
+  fi
+declare -A FILE_MAP
+generate_random_name() {
+    local chars=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890
+    local name=""
+    for i in {1..6}; do
+        name="$name${chars:RANDOM%${#chars}:1}"
+    done
+    echo "$name"
+}
 
-    echo "[$(date +"%F %T")] Downloading Singbox..."
-    curl -Lo web https://github.com/eooce/test/releases/download/freebsd/sb
-    
-    
-    # 检查文件是否存在，并赋予可执行权限
-    if [ -f "$WORKDIR/$NEW_FILENAME" ]; then
-        chmod +x web
-        echo "web downloaded and made executable."
+download_with_fallback() {
+    local URL=$1
+    local NEW_FILENAME=$2
 
-        # 启动进程
-		nohup ./web run -c config.json >/dev/null 2>&1 &
-        echo "$NEW_FILENAME 启动成功."
+    curl -L -sS --max-time 2 -o "$NEW_FILENAME" "$URL" &
+    CURL_PID=$!
+    CURL_START_SIZE=$(stat -c%s "$NEW_FILENAME" 2>/dev/null || echo 0)
+    
+    sleep 1
+    CURL_CURRENT_SIZE=$(stat -c%s "$NEW_FILENAME" 2>/dev/null || echo 0)
+    
+    if [ "$CURL_CURRENT_SIZE" -le "$CURL_START_SIZE" ]; then
+        kill $CURL_PID 2>/dev/null
+        wait $CURL_PID 2>/dev/null
+        wget -q -O "$NEW_FILENAME" "$URL"
+        echo -e "\e[1;32mDownloading $NEW_FILENAME by wget\e[0m"
     else
-        echo "$NEW_FILENAME 文件不存在."
+        wait $CURL_PID
+        echo -e "\e[1;32mDownloading $NEW_FILENAME by curl\e[0m"
     fi
 }
 
+for entry in "${FILE_INFO[@]}"; do
+    URL=$(echo "$entry" | cut -d ' ' -f 1)
+    FIXED_NAME=$(echo "$entry" | cut -d ' ' -f 2) # 使用文件信息中的固定名称
+    NEW_FILENAME="$DOWNLOAD_DIR/$FIXED_NAME"
+    
+    if [ -e "$NEW_FILENAME" ]; then
+        echo -e "\e[1;32m$NEW_FILENAME already exists, Skipping download\e[0m"
+    else
+        download_with_fallback "$URL" "$NEW_FILENAME"
+    fi
+    
+    chmod +x "$NEW_FILENAME"
+    FILE_MAP[$FIXED_NAME]="$NEW_FILENAME" # 使用固定名称作为键
+done
+
+wait
+
+if [ -e "$(basename ${FILE_MAP[npm]})" ]; then
+    tlsPorts=("443" "8443" "2096" "2087" "2083" "2053")
+    if [[ "${tlsPorts[*]}" =~ "${NEZHA_PORT}" ]]; then
+      NEZHA_TLS="--tls"
+    else
+      NEZHA_TLS=""
+    fi
+    if [ -n "$NEZHA_SERVER" ] && [ -n "$NEZHA_PORT" ] && [ -n "$NEZHA_KEY" ]; then
+        export TMPDIR=$(pwd)
+        nohup ./"$(basename ${FILE_MAP[npm]})" -s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${NEZHA_TLS} >/dev/null 2>&1 &
+        sleep 2
+        pgrep -x "$(basename ${FILE_MAP[npm]})" > /dev/null && green "$(basename ${FILE_MAP[npm]}) is running" || { red "$(basename ${FILE_MAP[npm]}) is not running, restarting..."; pkill -x "$(basename ${FILE_MAP[npm]})" && nohup ./"$(basename ${FILE_MAP[npm]})" -s "${NEZHA_SERVER}:${NEZHA_PORT}" -p "${NEZHA_KEY}" ${NEZHA_TLS} >/dev/null 2>&1 & sleep 2; purple "$(basename ${FILE_MAP[npm]}) restarted"; }
+    else
+        purple "NEZHA variable is empty, skipping running"
+    fi
+fi
+
+if [ -e "$(basename ${FILE_MAP[web]})" ]; then
+    nohup ./"$(basename ${FILE_MAP[web]})" run -c config.json >/dev/null 2>&1 &
+    sleep 2
+    pgrep -x "$(basename ${FILE_MAP[web]})" > /dev/null && green "$(basename ${FILE_MAP[web]}) is running" || { red "$(basename ${FILE_MAP[web]}) is not running, restarting..."; pkill -x "$(basename ${FILE_MAP[web]})" && nohup ./"$(basename ${FILE_MAP[web]})" run -c config.json >/dev/null 2>&1 & sleep 2; purple "$(basename ${FILE_MAP[web]}) restarted"; }
+fi
+
+if [ -e "$(basename ${FILE_MAP[bot]})" ]; then
+    if [[ $ARGO_AUTH =~ ^[A-Z0-9a-z=]{120,250}$ ]]; then
+      args="tunnel --edge-ip-version auto --no-autoupdate --protocol http2 run --token ${ARGO_AUTH}"
+    elif [[ $ARGO_AUTH =~ TunnelSecret ]]; then
+      args="tunnel --edge-ip-version auto --config tunnel.yml run"
+    else
+      args="tunnel --edge-ip-version auto --no-autoupdate --protocol http2 --logfile boot.log --loglevel info --url http://localhost:$vmess_port"
+    fi
+    nohup ./"$(basename ${FILE_MAP[bot]})" $args >/dev/null 2>&1 &
+    sleep 2
+    pgrep -x "$(basename ${FILE_MAP[bot]})" > /dev/null && green "$(basename ${FILE_MAP[bot]}) is running" || { red "$(basename ${FILE_MAP[bot]}) is not running, restarting..."; pkill -x "$(basename ${FILE_MAP[bot]})" && nohup ./"$(basename ${FILE_MAP[bot]})" "${args}" >/dev/null 2>&1 & sleep 2; purple "$(basename ${FILE_MAP[bot]}) restarted"; }
+fi
+sleep 5
+# rm -f "$(basename ${FILE_MAP[npm]})" "$(basename ${FILE_MAP[web]})" "$(basename ${FILE_MAP[bot]})"
+}
 
 get_argodomain() {
-  # 检查变量 ARGO_AUTH 是否非空（即是否已设置）
   if [[ -n $ARGO_AUTH ]]; then
-    # 如果 ARGO_AUTH 已设置，则直接输出 ARGO_DOMAIN 变量的值
     echo "$ARGO_DOMAIN"
   else
-    # 如果 ARGO_AUTH 未设置，则从 boot.log 文件中提取 Cloudflare 隧道生成的域名
-    # 使用 grep 命令查找符合 https://...trycloudflare.com 这种格式的字符串
-    # 然后使用 sed 命令去除 URL 中的 "https://" 前缀，留下域名部分
     grep -oE 'https://[[:alnum:]+\.-]+\.trycloudflare\.com' boot.log | sed 's@https://@@'
   fi
 }
 
 get_ip() {
-  # 使用 curl 命令尝试获取当前服务器的公网IP地址，设置超时时间为2秒
   ip=$(curl -s --max-time 2 ipv4.ip.sb)
-  
-  # 如果没有获取到IP地址，即$ip为空
   if [ -z "$ip" ]; then
-    # 判断HOSTNAME是否匹配形如 sX.serv00.com 的格式
-    # 如果匹配则将 HOSTNAME 中的 "s" 替换为 "web"，否则直接使用 HOSTNAME
     ip=$( [[ "$HOSTNAME" =~ s[0-9]\.serv00\.com ]] && echo "${HOSTNAME/s/web}" || echo "$HOSTNAME" )
   else
-    # 如果获取到IP地址，则构造一个URL用于检查端口 443 是否可访问
     url="https://www.toolsdaquan.com/toolapi/public/ipchecking/$ip/443"
-    # 使用 curl 发送 GET 请求以获取 IP 地址的访问状态，设置超时时间为3.5秒
     response=$(curl -s --location --max-time 3.5 --request GET "$url" --header 'Referer: https://www.toolsdaquan.com/ipcheck')
-    
-    # 如果没有响应，或者响应中不包含"icmp":"success"，则认为IP地址不可访问
     if [ -z "$response" ] || ! echo "$response" | grep -q '"icmp":"success"'; then
         accessible=false
     else
         accessible=true
     fi
-    
-    # 如果IP地址不可访问，则根据HOSTNAME做进一步处理
     if [ "$accessible" = false ]; then
         ip=$( [[ "$HOSTNAME" =~ s[0-9]\.serv00\.com ]] && echo "${HOSTNAME/s/web}" || echo "$ip" )
     fi
   fi
-  
-  # 输出最终确定的IP地址
   echo "$ip"
 }
-
 
 get_links(){
 argodomain=$(get_argodomain)
@@ -437,94 +484,14 @@ vmess://$(echo "{ \"v\": \"2\", \"ps\": \"$ISP\", \"add\": \"$CFIP\", \"port\": 
 
 hysteria2://$UUID@$IP:$hy2_port/?sni=www.bing.com&alpn=h3&insecure=1#$ISP
 
+tuic://$UUID:admin123@$IP:$tuic_port?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#$ISP
 EOF
 cat list.txt
 purple "\n$WORKDIR/list.txt saved successfully"
 purple "Running done!"
 sleep 2
-rm -rf boot.log config.json sb.log core tunnel.yml tunnel.json fake_useragent_0.2.0.json
+# rm -rf boot.log config.json sb.log core tunnel.yml tunnel.json fake_useragent_0.2.0.json
 }
-
-# 安装和配置 socks5
-socks5_config(){
-  # 提示用户输入 socks5 端口号
-  read -p "请输入 socks5 端口 (面板开放的TCP端口): " SOCKS5_PORT
-
-  # 提示用户输入用户名和密码
-  read -p "请输入 socks5 用户名: " SOCKS5_USER
-
-  while true; do
-    read -p "请输入 socks5 密码（不能包含@和:）：" SOCKS5_PASS
-    echo
-    if [[ "$SOCKS5_PASS" == *"@"* || "$SOCKS5_PASS" == *":"* ]]; then
-      echo "密码中不能包含@和:符号，请重新输入。"
-    else
-      break
-    fi
-  done
-
-  # config.js 文件
-  cat > "$FILE_PATH/config.json" << EOF
-{
-  "log": {
-    "access": "/dev/null",
-    "error": "/dev/null",
-    "loglevel": "none"
-  },
-  "inbounds": [
-    {
-      "port": "$SOCKS5_PORT",
-      "protocol": "socks",
-      "tag": "socks",
-      "settings": {
-        "auth": "password",
-        "udp": false,
-        "ip": "0.0.0.0",
-        "userLevel": 0,
-        "accounts": [
-          {
-            "user": "$SOCKS5_USER",
-            "pass": "$SOCKS5_PASS"
-          }
-        ]
-      }
-    }
-  ],
-  "outbounds": [
-    {
-      "tag": "direct",
-      "protocol": "freedom"
-    }
-  ]
-}
-EOF
-}
-
-install_socks5(){
-  socks5_config
-  if [[ ! -e "${FILE_PATH}/s5" ]]; then
-    curl -L -sS -o "${FILE_PATH}/s5" "https://github.com/eooce/test/releases/download/freebsd/web"
-  else
-    read -p "socks5 程序已存在，是否重新下载？(Y/N 回车N): " reinstall_socks5_answer
-    reinstall_socks5_answer=${reinstall_socks5_answer^^}
-    if [[ "$reinstall_socks5_answer" == "Y" ]]; then
-      curl -L -sS -o "${FILE_PATH}/s5" "https://github.com/eooce/test/releases/download/freebsd/web"
-    fi
-  fi
-  chmod +x "${FILE_PATH}/s5"
-  nohup "${FILE_PATH}/s5" -c "${FILE_PATH}/config.json" >/dev/null 2>&1 &
-  sleep 1
-  HOST_IP=$(get_ip)
-  sleep 1
-  if pgrep -x "s5" > /dev/null; then
-    echo -e "\e[1;32mSocks5 代理程序启动成功\e[0m"
-    echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32m$HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS\033[0m"
-	echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32msocks://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT\033[0m"
-  else
-    echo -e "\e[1;31mSocks5 代理程序启动失败\033[0m"
-  fi
-}
-
 
 menu() {
    clear
@@ -540,22 +507,19 @@ menu() {
    echo  "==============="
    green "3. 查看节点信息"
    echo  "==============="
-   red "4. 安装socks5"
-   echo  "==============="
-   yellow "5. 清理所有进程"
+   yellow "4. 清理所有进程"
    echo  "==============="
    red "0. 退出脚本"
    echo "==========="
-   reading "请输入选择(0-5): " choice
+   reading "请输入选择(0-3): " choice
    echo ""
     case "${choice}" in
         1) install_singbox ;;
         2) uninstall_singbox ;; 
         3) cat $WORKDIR/list.txt ;; 
-		4) install_socks5 ;;
-		5) kill_all_tasks ;;
+	4) kill_all_tasks ;;
         0) exit 0 ;;
-        *) red "无效的选项，请输入 0 到 5" ;;
+        *) red "无效的选项，请输入 0 到 4" ;;
     esac
 }
 menu
