@@ -632,7 +632,7 @@ install_socks5(){
 
 	tuic://$UUID:admin123@$IP:$tuic_port?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#$ISP
 	EOF
-	cat list.txt
+	cat $WORKDIR/list.txt
 	purple "\n$WORKDIR/list.txt saved successfully"
 	purple "Running done!"
   else
