@@ -663,13 +663,22 @@ fi
 
 # 确保工作目录存在且权限设置正确
 if [ ! -d "$WORKDIR" ]; then
+    echo "目录 $WORKDIR 不存在，正在创建..."
     mkdir -p "$WORKDIR" && chmod 777 "$WORKDIR"
+    echo "目录 $WORKDIR 已创建，权限设置为 777。"
+else
+    echo "目录 $WORKDIR 已存在。"
 fi
 
 # 确保文件路径存在且权限设置正确
 if [ ! -d "$FILE_PATH" ]; then
+    echo "目录 $FILE_PATH 不存在，正在创建..."
     mkdir -p "$FILE_PATH" && chmod 777 "$FILE_PATH"
+    echo "目录 $FILE_PATH 已创建，权限设置为 777。"
+else
+    echo "目录 $FILE_PATH 已存在。"
 fi
+
 
 ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
 
