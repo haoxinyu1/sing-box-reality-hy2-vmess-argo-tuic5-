@@ -11,8 +11,10 @@ yellow() { echo -e "\e[1;33m$1\033[0m"; }
 purple() { echo -e "\e[1;35m$1\033[0m"; }
 reading() { read -p "$(red "$1")" "$2"; }
 export LC_ALL=C
+# 获取当前用户名
 USERNAME=$(whoami)
 HOSTNAME=$(hostname)
+
 export UUID=${UUID:-'bc97f674-c578-4940-9234-0a1da46041b9'}
 export NEZHA_SERVER=${NEZHA_SERVER:-''} 
 export NEZHA_PORT=${NEZHA_PORT:-'5555'}     
@@ -22,8 +24,25 @@ export ARGO_AUTH=${ARGO_AUTH:-''}
 export CFIP=${CFIP:-'www.visa.com.tw'} 
 export CFPORT=${CFPORT:-'443'} 
 
-[[ "$HOSTNAME" == "s1.ct8.pl" ]] && WORKDIR="domains/${USERNAME}.ct8.pl/singbox" || WORKDIR="domains/${USERNAME}.serv00.net/singbox"
-[ -d "$WORKDIR" ] || (mkdir -p "$WORKDIR" && chmod 777 "$WORKDIR")
+# 设置工作目录和文件路径
+if [[ "$HOSTNAME" == "s1.ct8.pl" ]]; then
+    WORKDIR="domains/${USERNAME}.ct8.pl/singbox"
+    FILE_PATH="domains/${USERNAME}.ct8.pl/socks5"
+else
+    WORKDIR="domains/${USERNAME}.serv00.net/singbox"
+    FILE_PATH="domains/${USERNAME}.serv00.net/socks5"
+fi
+
+# 确保工作目录存在且权限设置正确
+if [ ! -d "$WORKDIR" ]; then
+    mkdir -p "$WORKDIR" && chmod 777 "$WORKDIR"
+fi
+
+# 确保文件路径存在且权限设置正确
+if [ ! -d "$FILE_PATH" ]; then
+    mkdir -p "$FILE_PATH" && chmod 777 "$FILE_PATH"
+fi
+
 ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
 
 
