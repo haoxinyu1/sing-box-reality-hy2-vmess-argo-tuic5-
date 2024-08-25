@@ -45,103 +45,13 @@ fi
 
 ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
 
-
-read_vmess_port() {
-    while true; do
-        reading "请输入vmess端口 (面板开放的tcp端口): " vmess_port
-        if [[ "$vmess_port" =~ ^[0-9]+$ ]] && [ "$vmess_port" -ge 1 ] && [ "$vmess_port" -le 65535 ]; then
-            green "你的vmess端口为: $vmess_port"
-            break
-        else
-            yellow "输入错误，请重新输入面板开放的TCP端口"
-        fi
-    done
-}
-
-read_hy2_port() {
-    while true; do
-        reading "请输入hysteria2端口 (面板开放的UDP端口): " hy2_port
-        if [[ "$hy2_port" =~ ^[0-9]+$ ]] && [ "$hy2_port" -ge 1 ] && [ "$hy2_port" -le 65535 ]; then
-            green "你的hysteria2端口为: $hy2_port"
-            break
-        else
-            yellow "输入错误，请重新输入面板开放的UDP端口"
-        fi
-    done
-}
-
-read_tuic_port() {
-    while true; do
-        reading "请输入Tuic端口 (面板开放的UDP端口): " tuic_port
-        if [[ "$tuic_port" =~ ^[0-9]+$ ]] && [ "$tuic_port" -ge 1 ] && [ "$tuic_port" -le 65535 ]; then
-            green "你的tuic端口为: $tuic_port"
-            break
-        else
-            yellow "输入错误，请重新输入面板开放的UDP端口"
-        fi
-    done
-}
-
-read_nz_variables() {
-  if [ -n "$NEZHA_SERVER" ] && [ -n "$NEZHA_PORT" ] && [ -n "$NEZHA_KEY" ]; then
-      green "使用自定义变量哪吒运行哪吒探针"
-      return
-  else
-      reading "是否需要安装哪吒探针？【y/n】: " nz_choice
-      [[ -z $nz_choice ]] && return
-      [[ "$nz_choice" != "y" && "$nz_choice" != "Y" ]] && return
-      reading "请输入哪吒探针域名或ip：" NEZHA_SERVER
-      green "你的哪吒域名为: $NEZHA_SERVER"
-      reading "请输入哪吒探针端口（回车跳过默认使用5555）：" NEZHA_PORT
-      [[ -z $NEZHA_PORT ]] && NEZHA_PORT="5555"
-      green "你的哪吒端口为: $NEZHA_PORT"
-      reading "请输入哪吒探针密钥：" NEZHA_KEY
-      green "你的哪吒密钥为: $NEZHA_KEY"
-  fi
-}
-
-
 install_singbox() {
 	cd "$WORKDIR" || { red "无法切换到工作目录 $WORKDIR，退出安装。"; exit 1; }  # 确保目录切换成功
-	# read_nz_variables  # 读取 nz 变量 (已注释，未使用)
-	read_vmess_port   # 读取 VMess 端口
-	read_hy2_port     # 读取 Hysteria2 端口
-	# read_tuic_port   # 读取 TUIC 端口 (已注释，未使用)
 	argo_configure    # 配置 Argo 隧道
 	generate_config   # 生成配置文件
 	download_singbox  # 下载 SingBox 并启动
 	set_links         # 写入相关链接和信息
 	install_socks5    # 安装socks5
-}
-
-uninstall_singbox() {
-  reading "\n确定要卸载吗？【y/n】: " choice
-    case "$choice" in
-        [Yy])
-	      ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
-       	      rm -rf $WORKDIR
-	      clear
-       	      green “四合一已完全卸载”
-          ;;
-        [Nn]) exit 0 ;;
-    	  *) red "无效的选择，请输入y或n" && menu ;;
-    esac
-}
-
-kill_all_tasks() {
-reading "\n清理所有进程将退出ssh连接，确定继续清理吗？【y/n】: " choice
-  case "$choice" in
-    [Yy]) killall -9 -u $(whoami) ;;
-       *) menu ;;
-  esac
-}
-
-kill_tasks() {
-reading "\n清理所有进程，确定继续清理吗？【y/n】: " choice
-  case "$choice" in
-    [Yy]) ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null ;;
-       *) menu ;;
-  esac
 }
 
 # Generating argo Config
@@ -222,10 +132,10 @@ generate_config() {
        "tag": "hysteria-in",
        "type": "hysteria2",
        "listen": "::",
-       "listen_port": $hy2_port,
+       "listen_port": 35678,
        "users": [
          {
-             "password": "$UUID"
+             "password": "2c7ee26e-51d3-42a1-97e6-3cdccfdecc5a"
          }
      ],
      "masquerade": "https://bing.com",
@@ -242,10 +152,10 @@ generate_config() {
       "tag": "vmess-ws-in",
       "type": "vmess",
       "listen": "::",
-      "listen_port": $vmess_port,
+      "listen_port": 35679,
       "users": [
       {
-        "uuid": "$UUID"
+        "uuid": "266382e6-5a1b-4d6c-b5b0-b7f5709499f0"
       }
     ],
     "transport": {
@@ -356,23 +266,14 @@ EOF
 download_singbox() {
   ARCH=$(uname -m) && DOWNLOAD_DIR="." && mkdir -p "$DOWNLOAD_DIR" && FILE_INFO=()
   if [ "$ARCH" == "arm" ] || [ "$ARCH" == "arm64" ] || [ "$ARCH" == "aarch64" ]; then
-      FILE_INFO=("https://github.com/eooce/test/releases/download/arm64/sb web" "https://github.com/eooce/test/releases/download/arm64/bot13 bot" "https://github.com/eooce/test/releases/download/ARM/swith npm")
+      FILE_INFO=("https://github.com/eooce/test/releases/download/arm64/sb web" "https://github.com/eooce/test/releases/download/arm64/bot13 bot")
   elif [ "$ARCH" == "amd64" ] || [ "$ARCH" == "x86_64" ] || [ "$ARCH" == "x86" ]; then
-      FILE_INFO=("https://github.com/eooce/test/releases/download/freebsd/sb web" "https://github.com/eooce/test/releases/download/freebsd/server bot" "https://github.com/eooce/test/releases/download/freebsd/npm npm")
+      FILE_INFO=("https://github.com/eooce/test/releases/download/freebsd/sb web" "https://github.com/eooce/test/releases/download/freebsd/server bot")
   else
       echo "Unsupported architecture: $ARCH"
       exit 1
   fi
 declare -A FILE_MAP
-generate_random_name() {
-    local chars=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890
-    local name=""
-    for i in {1..6}; do
-        name="$name${chars:RANDOM%${#chars}:1}"
-    done
-    echo "$name"
-}
-
 download_with_fallback() {
     local URL=$1
     local NEW_FILENAME=$2
@@ -411,24 +312,6 @@ for entry in "${FILE_INFO[@]}"; do
 done
 
 wait
-
-if [ -e "$(basename ${FILE_MAP[npm]})" ]; then
-    tlsPorts=("443" "8443" "2096" "2087" "2083" "2053")
-    if [[ "${tlsPorts[*]}" =~ "${NEZHA_PORT}" ]]; then
-      NEZHA_TLS="--tls"
-    else
-      NEZHA_TLS=""
-    fi
-    if [ -n "$NEZHA_SERVER" ] && [ -n "$NEZHA_PORT" ] && [ -n "$NEZHA_KEY" ]; then
-        export TMPDIR=$(pwd)
-        nohup ./"$(basename ${FILE_MAP[npm]})" -s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${NEZHA_TLS} >/dev/null 2>&1 &
-        sleep 2
-        pgrep -x "$(basename ${FILE_MAP[npm]})" > /dev/null && green "$(basename ${FILE_MAP[npm]}) is running" || { red "$(basename ${FILE_MAP[npm]}) is not running, restarting..."; pkill -x "$(basename ${FILE_MAP[npm]})" && nohup ./"$(basename ${FILE_MAP[npm]})" -s "${NEZHA_SERVER}:${NEZHA_PORT}" -p "${NEZHA_KEY}" ${NEZHA_TLS} >/dev/null 2>&1 & sleep 2; purple "$(basename ${FILE_MAP[npm]}) restarted"; }
-    else
-        purple "NEZHA variable is empty, skipping running"
-    fi
-fi
-
 if [ -e "$(basename ${FILE_MAP[web]})" ]; then
     nohup ./"$(basename ${FILE_MAP[web]})" run -c config.json >/dev/null 2>&1 &
     sleep 2
@@ -448,7 +331,7 @@ if [ -e "$(basename ${FILE_MAP[bot]})" ]; then
     pgrep -x "$(basename ${FILE_MAP[bot]})" > /dev/null && green "$(basename ${FILE_MAP[bot]}) is running" || { red "$(basename ${FILE_MAP[bot]}) is not running, restarting..."; pkill -x "$(basename ${FILE_MAP[bot]})" && nohup ./"$(basename ${FILE_MAP[bot]})" "${args}" >/dev/null 2>&1 & sleep 2; purple "$(basename ${FILE_MAP[bot]}) restarted"; }
 fi
 sleep 5
-# rm -f "$(basename ${FILE_MAP[npm]})" "$(basename ${FILE_MAP[web]})" "$(basename ${FILE_MAP[bot]})"
+rm -f "$(basename ${FILE_MAP[npm]})" "$(basename ${FILE_MAP[web]})" "$(basename ${FILE_MAP[bot]})"
 }
 
 get_argodomain() {
@@ -494,34 +377,17 @@ vmess://$(echo "{ \"v\": \"2\", \"ps\": \"$ISP\", \"add\": \"$CFIP\", \"port\": 
 hysteria2://$UUID@$IP:$hy2_port/?sni=www.bing.com&alpn=h3&insecure=1#$ISP
 
 tuic://$UUID:admin123@$IP:$tuic_port?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#$ISP
-
 此脚本tuic协议无法使用，因为只有3个端口，让给了socks5
 EOF
   cat list.txt
   purple "\n$WORKDIR/list.txt saved successfully"
   purple "Running done!"
   sleep 2
-  # rm -rf boot.log config.json sb.log core tunnel.yml tunnel.json fake_useragent_0.2.0.json
+  rm -rf boot.log config.json sb.log core tunnel.yml tunnel.json fake_useragent_0.2.0.json
 }
 
 # 安装和配置 socks5
 socks5_config(){
-  # 提示用户输入 socks5 端口号
-  read -p "请输入 socks5 端口 (面板开放的TCP端口): " SOCKS5_PORT
-
-  # 提示用户输入用户名和密码
-  read -p "请输入 socks5 用户名: " SOCKS5_USER
-
-  while true; do
-    read -p "请输入 socks5 密码（不能包含@和:）：" SOCKS5_PASS
-    echo
-    if [[ "$SOCKS5_PASS" == *"@"* || "$SOCKS5_PASS" == *":"* ]]; then
-      echo "密码中不能包含@和:符号，请重新输入。"
-    else
-      break
-    fi
-  done
-
   # config.js 文件
   cat > "$FILE_PATH/config.json" << EOF
 {
@@ -532,7 +398,7 @@ socks5_config(){
   },
   "inbounds": [
     {
-      "port": "$SOCKS5_PORT",
+      "port": "35670",
       "protocol": "socks",
       "tag": "socks",
       "settings": {
@@ -542,8 +408,8 @@ socks5_config(){
         "userLevel": 0,
         "accounts": [
           {
-            "user": "$SOCKS5_USER",
-            "pass": "$SOCKS5_PASS"
+            "user": "serv00",
+            "pass": "serv001035670"
           }
         ]
       }
