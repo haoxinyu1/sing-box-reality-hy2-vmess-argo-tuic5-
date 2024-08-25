@@ -622,10 +622,25 @@ EOF
 
 install_socks5(){
   # 读取用户选择
-  read -p "\n是否安装SOCKS5？【y/n】: " choice
+  read -p "是否安装SOCKS5？【y/n】: " choice
   case "$choice" in
     [Yy])
+      # 设置工作目录和文件路径
+      if [[ "$HOSTNAME" == "s1.ct8.pl" ]]; then
+        FILE_PATH="domains/${USERNAME}.ct8.pl/socks5"
+      else
+        FILE_PATH="domains/${USERNAME}.serv00.net/socks5"
+      fi
+      
+      # 确保文件路径存在且权限设置正确
+      if [ ! -d "$FILE_PATH" ]; then
+        mkdir -p "$FILE_PATH" && chmod 777 "$FILE_PATH"
+      fi
+
+      # 进行 socks5 配置
       socks5_config
+
+      # 下载或更新 socks5 程序
       if [[ ! -e "${FILE_PATH}/s5" ]]; then
         curl -L -sS -o "${FILE_PATH}/s5" "https://github.com/eooce/test/releases/download/freebsd/web"
       else
@@ -635,17 +650,27 @@ install_socks5(){
           curl -L -sS -o "${FILE_PATH}/s5" "https://github.com/eooce/test/releases/download/freebsd/web"
         fi
       fi
+
+      # 设置执行权限并启动 socks5 程序
       chmod +x "${FILE_PATH}/s5"
       nohup "${FILE_PATH}/s5" -c "${FILE_PATH}/config.json" >/dev/null 2>&1 &
       sleep 1
+
+      # 获取主机 IP
       HOST_IP=$(get_ip)
       sleep 1
+
+      # 检查 socks5 程序是否成功启动
       if pgrep -x "s5" > /dev/null; then
         echo -e "\e[1;32mSocks5 代理程序启动成功\e[0m"
         echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32m$HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS\033[0m"
         echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32msocks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT\033[0m"
+        
+        # 更新或创建 list.txt 文件
         if [[ -e "$WORKDIR/list.txt" ]]; then
-          echo "socks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT" >> "$WORKDIR/list.txt"
+          echo -e "\n\nsocks5节点信息\n" >> "$WORKDIR/list.txt"
+          echo -e "\n$HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS\n" >> "$WORKDIR/list.txt"
+          echo -e "\nsocks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT\n" >> "$WORKDIR/list.txt"
         else
           cat > "$WORKDIR/list.txt" <<EOF
 socks5节点信息
@@ -669,6 +694,7 @@ EOF
       ;;
   esac
 }
+
 
 uninstall_socks5() {
   reading "\n确定要卸载吗？【y/n】: " choice
