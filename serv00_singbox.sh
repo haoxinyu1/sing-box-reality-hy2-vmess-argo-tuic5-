@@ -525,14 +525,19 @@ get_ip() {
 }
 
 get_links(){
-argodomain=$(get_argodomain)
-echo -e "\e[1;32mArgoDomain:\e[1;35m${argodomain}\e[0m\n"
-sleep 1
-IP=$(get_ip)
-ISP=$(curl -s https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18}' | sed -e 's/ /_/g') 
-sleep 1
-yellow "注意：v2ray或其他软件的跳过证书验证需设置为true,否则hy2或tuic节点可能不通\n"
-cat > list.txt <<EOF
+  argodomain=$(get_argodomain)
+  echo -e "\e[1;32mArgoDomain:\e[1;35m${argodomain}\e[0m\n"
+  sleep 1
+  IP=$(get_ip)
+  ISP=$(curl -s https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18}' | sed -e 's/ /_/g') 
+  sleep 1
+  yellow "注意：v2ray或其他软件的跳过证书验证需设置为true,否则hy2或tuic节点可能不通\n"
+  
+  # 临时文件
+  temp_file=$(mktemp)
+
+  # 生成内容
+  cat <<EOF > "$temp_file"
 vmess://$(echo "{ \"v\": \"2\", \"ps\": \"$ISP\", \"add\": \"$IP\", \"port\": \"$vmess_port\", \"id\": \"$UUID\", \"aid\": \"0\", \"scy\": \"none\", \"net\": \"ws\", \"type\": \"none\", \"host\": \"\", \"path\": \"/vmess?ed=2048\", \"tls\": \"\", \"sni\": \"\", \"alpn\": \"\", \"fp\": \"\"}" | base64 -w0)
 
 vmess://$(echo "{ \"v\": \"2\", \"ps\": \"$ISP\", \"add\": \"$CFIP\", \"port\": \"$CFPORT\", \"id\": \"$UUID\", \"aid\": \"0\", \"scy\": \"none\", \"net\": \"ws\", \"type\": \"none\", \"host\": \"$argodomain\", \"path\": \"/vmess?ed=2048\", \"tls\": \"tls\", \"sni\": \"$argodomain\", \"alpn\": \"\", \"fp\": \"\"}" | base64 -w0)
@@ -541,12 +546,26 @@ hysteria2://$UUID@$IP:$hy2_port/?sni=www.bing.com&alpn=h3&insecure=1#$ISP
 
 tuic://$UUID:admin123@$IP:$tuic_port?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#$ISP
 EOF
-cat list.txt
-purple "\n$WORKDIR/list.txt saved successfully"
-purple "Running done!"
-sleep 2
-# rm -rf boot.log config.json sb.log core tunnel.yml tunnel.json fake_useragent_0.2.0.json
+
+  # 检查是否存在信息，并根据情况覆盖内容
+  if grep -q -e 'vmess://' -e 'hysteria2://' -e 'tuic://' "$WORKDIR/list.txt"; then
+    echo "Overwriting existing list.txt with new content"
+    cp "$temp_file" "$WORKDIR/list.txt"
+  else
+    echo "Creating new list.txt"
+    cat "$temp_file" >> "$WORKDIR/list.txt"
+  fi
+
+  # 清理临时文件
+  rm "$temp_file"
+
+  cat "$WORKDIR/list.txt"
+  purple "\n$WORKDIR/list.txt saved successfully"
+  purple "Running done!"
+  sleep 2
+  # rm -rf boot.log config.json sb.log core tunnel.yml tunnel.json fake_useragent_0.2.0.json
 }
+
 
 # 安装和配置 socks5
 socks5_config(){
@@ -621,12 +640,25 @@ install_socks5(){
   sleep 1
   if pgrep -x "s5" > /dev/null; then
     echo -e "\e[1;32mSocks5 代理程序启动成功\e[0m"
-    echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32m$HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS\033[0m"
-	echo -e "\e[1;33mSocks5 代理地址：\033[0m \e[1;32msocks://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT\033[0m"
+    PROXY_INFO="\e[1;33mSocks5 代理地址：\033[0m \e[1;32m$HOST_IP:$SOCKS5_PORT 用户名：$SOCKS5_USER 密码：$SOCKS5_PASS\033[0m"
+    PROXY_URL="\e[1;33mSocks5 代理地址：\033[0m \e[1;32msocks5://$SOCKS5_USER:$SOCKS5_PASS@$HOST_IP:$SOCKS5_PORT\033[0m"
+
+    echo -e "$PROXY_INFO"
+    echo -e "$PROXY_URL"
+
+    LIST_FILE="$WORKDIR/list.txt"
+    if grep -q "Socks5 代理地址" "$LIST_FILE"; then
+      # 文件存在且包含 Socks5 代理信息，覆盖相关内容
+      sed -i "/Socks5 代理地址/d" "$LIST_FILE"
+    fi
+    # 将新的代理信息写入 list.txt
+    echo -e "$PROXY_INFO" >> "$LIST_FILE"
+    echo -e "$PROXY_URL" >> "$LIST_FILE"
   else
     echo -e "\e[1;31mSocks5 代理程序启动失败\033[0m"
   fi
 }
+
 
 uninstall_socks5() {
   reading "\n确定要卸载吗？【y/n】: " choice
