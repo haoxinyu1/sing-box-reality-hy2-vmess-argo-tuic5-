@@ -10,40 +10,54 @@ green() { echo -e "\e[1;32m$1\033[0m"; }
 yellow() { echo -e "\e[1;33m$1\033[0m"; }
 purple() { echo -e "\e[1;35m$1\033[0m"; }
 reading() { read -p "$(red "$1")" "$2"; }
-export LC_ALL=C
+
 # 获取当前用户名
 USERNAME=$(whoami)
+# 获取当前主机名
 HOSTNAME=$(hostname)
-
-export UUID=${UUID:-'bc97f674-c578-4940-9234-0a1da46041b9'}
-export NEZHA_SERVER=${NEZHA_SERVER:-''} 
-export NEZHA_PORT=${NEZHA_PORT:-'5555'}     
-export NEZHA_KEY=${NEZHA_KEY:-''} 
-export ARGO_DOMAIN=${ARGO_DOMAIN:-''}   
-export ARGO_AUTH=${ARGO_AUTH:-''}
-export CFIP=${CFIP:-'www.visa.com.tw'} 
-export CFPORT=${CFPORT:-'443'} 
+# 停止程序线程
+ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
 
 # 设置工作目录和文件路径
 if [[ "$HOSTNAME" == "s1.ct8.pl" ]]; then
-    WORKDIR="domains/${USERNAME}.ct8.pl/singbox"
-    FILE_PATH="domains/${USERNAME}.ct8.pl/socks5"
+    WORKDIR="/home/$USERNAME/domains/${USERNAME}.ct8.pl/singbox"
+    FILE_PATH="/home/$USERNAME/domains/${USERNAME}.ct8.pl/socks5"
 else
-    WORKDIR="domains/${USERNAME}.serv00.net/singbox"
-    FILE_PATH="domains/${USERNAME}.serv00.net/socks5"
+    WORKDIR="/home/$USERNAME/domains/${USERNAME}.serv00.net/singbox"
+    FILE_PATH="/home/$USERNAME/domains/${USERNAME}.serv00.net/socks5"
 fi
 
-# 确保工作目录存在且权限设置正确
-if [ ! -d "$WORKDIR" ]; then
-    mkdir -p "$WORKDIR" && chmod 777 "$WORKDIR"
+# 删除并重新创建工作目录
+if [ -d "$WORKDIR" ]; then
+    echo "Deleting existing WORKDIR: $WORKDIR"
+    rm -rfv "$WORKDIR"
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to delete WORKDIR: $WORKDIR"
+        exit 1
+    fi
 fi
-
-# 确保文件路径存在且权限设置正确
-if [ ! -d "$FILE_PATH" ]; then
-    mkdir -p "$FILE_PATH" && chmod 777 "$FILE_PATH"
+mkdir -p "$WORKDIR" && chmod 777 "$WORKDIR"
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to create WORKDIR: $WORKDIR"
+    exit 1
 fi
+echo "Successfully created WORKDIR: $WORKDIR"
 
-# ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk '{print $2}' | xargs -r kill -9 2>/dev/null
+# 删除并重新创建文件路径
+if [ -d "$FILE_PATH" ]; then
+    echo "Deleting existing FILE_PATH: $FILE_PATH"
+    rm -rfv "$FILE_PATH"
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to delete FILE_PATH: $FILE_PATH"
+        exit 1
+    fi
+fi
+mkdir -p "$FILE_PATH" && chmod 777 "$FILE_PATH"
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to create FILE_PATH: $FILE_PATH"
+    exit 1
+fi
+echo "Successfully created FILE_PATH: $FILE_PATH"
 
 
 read_vmess_port() {
@@ -70,35 +84,6 @@ read_hy2_port() {
     done
 }
 
-read_tuic_port() {
-    while true; do
-        reading "请输入Tuic端口 (面板开放的UDP端口): " tuic_port
-        if [[ "$tuic_port" =~ ^[0-9]+$ ]] && [ "$tuic_port" -ge 1 ] && [ "$tuic_port" -le 65535 ]; then
-            green "你的tuic端口为: $tuic_port"
-            break
-        else
-            yellow "输入错误，请重新输入面板开放的UDP端口"
-        fi
-    done
-}
-
-read_nz_variables() {
-  if [ -n "$NEZHA_SERVER" ] && [ -n "$NEZHA_PORT" ] && [ -n "$NEZHA_KEY" ]; then
-      green "使用自定义变量哪吒运行哪吒探针"
-      return
-  else
-      reading "是否需要安装哪吒探针？【y/n】: " nz_choice
-      [[ -z $nz_choice ]] && return
-      [[ "$nz_choice" != "y" && "$nz_choice" != "Y" ]] && return
-      reading "请输入哪吒探针域名或ip：" NEZHA_SERVER
-      green "你的哪吒域名为: $NEZHA_SERVER"
-      reading "请输入哪吒探针端口（回车跳过默认使用5555）：" NEZHA_PORT
-      [[ -z $NEZHA_PORT ]] && NEZHA_PORT="5555"
-      green "你的哪吒端口为: $NEZHA_PORT"
-      reading "请输入哪吒探针密钥：" NEZHA_KEY
-      green "你的哪吒密钥为: $NEZHA_KEY"
-  fi
-}
 
 # UUID 生成函数
 generate_uuid() {
@@ -138,15 +123,12 @@ install_singbox() {
         [Yy])
             UUID=$(generate_uuid)  # 生成 UUID 并赋值给 UUID 变量
             cd "$WORKDIR" || { red "无法切换到工作目录 $WORKDIR，退出安装。"; exit 1; }  # 确保目录切换成功
-            # read_nz_variables  # 读取 nz 变量 (已注释，未使用)
             read_vmess_port   # 读取 VMess 端口
             read_hy2_port     # 读取 Hysteria2 端口
-            # read_tuic_port   # 读取 TUIC 端口 (已注释，未使用)
-            argo_configure    # 配置 Argo 隧道
             generate_config   # 生成配置文件
             download_singbox  # 下载 SingBox 并启动
             set_links         # 写入相关链接和信息
-	    install_socks5    # 安装socks5
+	        install_socks5    # 安装socks5
             ;;
         [Nn]) 
             exit 0 
@@ -188,42 +170,6 @@ reading "\n清理所有进程，确定继续清理吗？【y/n】: " choice
   esac
 }
 
-# Generating argo Config
-argo_configure() {
-  if [[ -z $ARGO_AUTH || -z $ARGO_DOMAIN ]]; then
-      reading "是否需要使用固定argo隧道？【y/n】: " argo_choice
-      [[ -z $argo_choice ]] && return
-      [[ "$argo_choice" != "y" && "$argo_choice" != "Y" && "$argo_choice" != "n" && "$argo_choice" != "N" ]] && { red "无效的选择，请输入y或n"; return; }
-      if [[ "$argo_choice" == "y" || "$argo_choice" == "Y" ]]; then
-          reading "请输入argo固定隧道域名: " ARGO_DOMAIN
-          green "你的argo固定隧道域名为: $ARGO_DOMAIN"
-          reading "请输入argo固定隧道密钥（Json或Token）: " ARGO_AUTH
-          green "你的argo固定隧道密钥为: $ARGO_AUTH"
-	  echo -e "${red}注意：${purple}使用token，需要在cloudflare后台设置隧道端口和面板开放的tcp端口一致${re}"
-      else
-          green "ARGO隧道变量未设置，将使用临时隧道"
-          return
-      fi
-  fi
-
-  if [[ $ARGO_AUTH =~ TunnelSecret ]]; then
-    echo $ARGO_AUTH > tunnel.json
-    cat > tunnel.yml << EOF
-tunnel: $(cut -d\" -f12 <<< "$ARGO_AUTH")
-credentials-file: tunnel.json
-protocol: http2
-
-ingress:
-  - hostname: $ARGO_DOMAIN
-    service: http://localhost:$vmess_port
-    originRequest:
-      noTLSVerify: true
-  - service: http_status:404
-EOF
-  else
-    green "ARGO_AUTH mismatch TunnelSecret,use token connect to tunnel"
-  fi
-}
 
 # Generating Configuration Files
 generate_config() {
@@ -411,22 +357,13 @@ EOF
 download_singbox() {
   ARCH=$(uname -m) && DOWNLOAD_DIR="." && mkdir -p "$DOWNLOAD_DIR" && FILE_INFO=()
   if [ "$ARCH" == "arm" ] || [ "$ARCH" == "arm64" ] || [ "$ARCH" == "aarch64" ]; then
-      FILE_INFO=("https://github.com/eooce/test/releases/download/arm64/sb web" "https://github.com/eooce/test/releases/download/arm64/bot13 bot" "https://github.com/eooce/test/releases/download/ARM/swith npm")
+      FILE_INFO=("https://github.com/eooce/test/releases/download/arm64/sb web")
   elif [ "$ARCH" == "amd64" ] || [ "$ARCH" == "x86_64" ] || [ "$ARCH" == "x86" ]; then
-      FILE_INFO=("https://github.com/eooce/test/releases/download/freebsd/sb web" "https://github.com/eooce/test/releases/download/freebsd/server bot" "https://github.com/eooce/test/releases/download/freebsd/npm npm")
+      FILE_INFO=("https://github.com/eooce/test/releases/download/freebsd/sb web")
   else
       echo "Unsupported architecture: $ARCH"
       exit 1
   fi
-declare -A FILE_MAP
-generate_random_name() {
-    local chars=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890
-    local name=""
-    for i in {1..6}; do
-        name="$name${chars:RANDOM%${#chars}:1}"
-    done
-    echo "$name"
-}
 
 download_with_fallback() {
     local URL=$1
@@ -467,41 +404,12 @@ done
 
 wait
 
-if [ -e "$(basename ${FILE_MAP[npm]})" ]; then
-    tlsPorts=("443" "8443" "2096" "2087" "2083" "2053")
-    if [[ "${tlsPorts[*]}" =~ "${NEZHA_PORT}" ]]; then
-      NEZHA_TLS="--tls"
-    else
-      NEZHA_TLS=""
-    fi
-    if [ -n "$NEZHA_SERVER" ] && [ -n "$NEZHA_PORT" ] && [ -n "$NEZHA_KEY" ]; then
-        export TMPDIR=$(pwd)
-        nohup ./"$(basename ${FILE_MAP[npm]})" -s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${NEZHA_TLS} >/dev/null 2>&1 &
-        sleep 2
-        pgrep -x "$(basename ${FILE_MAP[npm]})" > /dev/null && green "$(basename ${FILE_MAP[npm]}) is running" || { red "$(basename ${FILE_MAP[npm]}) is not running, restarting..."; pkill -x "$(basename ${FILE_MAP[npm]})" && nohup ./"$(basename ${FILE_MAP[npm]})" -s "${NEZHA_SERVER}:${NEZHA_PORT}" -p "${NEZHA_KEY}" ${NEZHA_TLS} >/dev/null 2>&1 & sleep 2; purple "$(basename ${FILE_MAP[npm]}) restarted"; }
-    else
-        purple "NEZHA variable is empty, skipping running"
-    fi
-fi
-
 if [ -e "$(basename ${FILE_MAP[web]})" ]; then
     nohup ./"$(basename ${FILE_MAP[web]})" run -c config.json >/dev/null 2>&1 &
     sleep 2
     pgrep -x "$(basename ${FILE_MAP[web]})" > /dev/null && green "$(basename ${FILE_MAP[web]}) is running" || { red "$(basename ${FILE_MAP[web]}) is not running, restarting..."; pkill -x "$(basename ${FILE_MAP[web]})" && nohup ./"$(basename ${FILE_MAP[web]})" run -c config.json >/dev/null 2>&1 & sleep 2; purple "$(basename ${FILE_MAP[web]}) restarted"; }
 fi
 
-if [ -e "$(basename ${FILE_MAP[bot]})" ]; then
-    if [[ $ARGO_AUTH =~ ^[A-Z0-9a-z=]{120,250}$ ]]; then
-      args="tunnel --edge-ip-version auto --no-autoupdate --protocol http2 run --token ${ARGO_AUTH}"
-    elif [[ $ARGO_AUTH =~ TunnelSecret ]]; then
-      args="tunnel --edge-ip-version auto --config tunnel.yml run"
-    else
-      args="tunnel --edge-ip-version auto --no-autoupdate --protocol http2 --logfile boot.log --loglevel info --url http://localhost:$vmess_port"
-    fi
-    nohup ./"$(basename ${FILE_MAP[bot]})" $args >/dev/null 2>&1 &
-    sleep 2
-    pgrep -x "$(basename ${FILE_MAP[bot]})" > /dev/null && green "$(basename ${FILE_MAP[bot]}) is running" || { red "$(basename ${FILE_MAP[bot]}) is not running, restarting..."; pkill -x "$(basename ${FILE_MAP[bot]})" && nohup ./"$(basename ${FILE_MAP[bot]})" "${args}" >/dev/null 2>&1 & sleep 2; purple "$(basename ${FILE_MAP[bot]}) restarted"; }
-fi
 sleep 5
 # rm -f "$(basename ${FILE_MAP[npm]})" "$(basename ${FILE_MAP[web]})" "$(basename ${FILE_MAP[bot]})"
 }
@@ -548,9 +456,6 @@ vmess://$(echo "{ \"v\": \"2\", \"ps\": \"$ISP\", \"add\": \"$CFIP\", \"port\": 
 
 hysteria2://$UUID@$IP:$hy2_port/?sni=www.bing.com&alpn=h3&insecure=1#$ISP
 
-tuic://$UUID:admin123@$IP:$tuic_port?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#$ISP
-
-此脚本tuic协议无法使用，因为只有3个端口，让给了socks5
 EOF
   cat list.txt
   purple "\n$WORKDIR/list.txt saved successfully"
