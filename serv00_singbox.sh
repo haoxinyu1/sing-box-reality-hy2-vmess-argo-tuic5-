@@ -541,16 +541,6 @@ install_socks5(){
   read -p "是否安装SOCKS5？【y/n】: " choice
   case "$choice" in
     [Yy])
-      # 设置工作目录和文件路径
-      if [[ "$HOSTNAME" == "s1.ct8.pl" ]]; then
-        FILE_PATH="domains/${USERNAME}.ct8.pl/socks5"
-      else
-        FILE_PATH="domains/${USERNAME}.serv00.net/socks5"
-      fi
-      
-      # 确保文件路径存在且权限设置正确
-      mkdir -p "$FILE_PATH" && chmod 777 "$FILE_PATH"
-
       # 进行 socks5 配置
       socks5_config
 
