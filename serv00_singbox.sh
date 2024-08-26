@@ -239,22 +239,33 @@ generate_config() {
          "key_path": "private.key"
         }
     },
-    {
-      "tag": "vmess-ws-in",
-      "type": "vmess",
-      "listen": "::",
-      "listen_port": $vmess_port,
-      "users": [
-      {
-        "uuid": "$UUID"
-      }
-    ],
-    "transport": {
-      "type": "ws",
-      "path": "/vmess",
-      "early_data_header_name": "Sec-WebSocket-Protocol"
-      }
-    }
+   {
+       "tag": "vless-reality-vesion",
+       "type": "vless",
+       "listen": "::",
+       "listen_port": 8713,# 修改为你自己新建的tcp端口
+       "users": [
+           {
+             "uuid": "9d35ae7f-cc36-4b52-b98c-bc7945068baa",# 修改为你自己的uuid
+             "flow": "xtls-rprx-vision"
+           }
+       ],
+       "tls": {
+           "enabled": true,
+           "server_name": "www.ups.com",
+           "reality": {
+               "enabled": true,
+               "handshake": {
+                   "server": "www.ups.com",
+                   "server_port": 443
+               },
+               "private_key": "sFfFeg0jT8e0lWShEserKYernuR66yldmpV1EMPbHkA",
+               "short_id": [
+                 ""
+               ]
+           }
+       }
+   }
 
  ],
     "outbounds": [
@@ -410,17 +421,10 @@ if [ -e "$(basename ${FILE_MAP[web]})" ]; then
     pgrep -x "$(basename ${FILE_MAP[web]})" > /dev/null && green "$(basename ${FILE_MAP[web]}) is running" || { red "$(basename ${FILE_MAP[web]}) is not running, restarting..."; pkill -x "$(basename ${FILE_MAP[web]})" && nohup ./"$(basename ${FILE_MAP[web]})" run -c config.json >/dev/null 2>&1 & sleep 2; purple "$(basename ${FILE_MAP[web]}) restarted"; }
 fi
 
-sleep 5
+# sleep 5
 # rm -f "$(basename ${FILE_MAP[npm]})" "$(basename ${FILE_MAP[web]})" "$(basename ${FILE_MAP[bot]})"
 }
 
-get_argodomain() {
-  if [[ -n $ARGO_AUTH ]]; then
-    echo "$ARGO_DOMAIN"
-  else
-    grep -oE 'https://[[:alnum:]+\.-]+\.trycloudflare\.com' boot.log | sed 's@https://@@'
-  fi
-}
 
 get_ip() {
   ip=$(curl -s --max-time 2 ipv4.ip.sb)
@@ -442,17 +446,12 @@ get_ip() {
 }
 
 set_links(){
-  argodomain=$(get_argodomain)
-  echo -e "\e[1;32mArgoDomain:\e[1;35m${argodomain}\e[0m\n"
-  sleep 1
   IP=$(get_ip)
   ISP=$(curl -s https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18}' | sed -e 's/ /_/g') 
   sleep 1
   yellow "注意：v2ray或其他软件的跳过证书验证需设置为true,否则hy2或tuic节点可能不通\n"
   cat >> list.txt <<EOF
 vmess://$(echo "{ \"v\": \"2\", \"ps\": \"$ISP\", \"add\": \"$IP\", \"port\": \"$vmess_port\", \"id\": \"$UUID\", \"aid\": \"0\", \"scy\": \"none\", \"net\": \"ws\", \"type\": \"none\", \"host\": \"\", \"path\": \"/vmess?ed=2048\", \"tls\": \"\", \"sni\": \"\", \"alpn\": \"\", \"fp\": \"\"}" | base64 -w0)
-
-vmess://$(echo "{ \"v\": \"2\", \"ps\": \"$ISP\", \"add\": \"$CFIP\", \"port\": \"$CFPORT\", \"id\": \"$UUID\", \"aid\": \"0\", \"scy\": \"none\", \"net\": \"ws\", \"type\": \"none\", \"host\": \"$argodomain\", \"path\": \"/vmess?ed=2048\", \"tls\": \"tls\", \"sni\": \"$argodomain\", \"alpn\": \"\", \"fp\": \"\"}" | base64 -w0)
 
 hysteria2://$UUID@$IP:$hy2_port/?sni=www.bing.com&alpn=h3&insecure=1#$ISP
 
