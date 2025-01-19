@@ -141,8 +141,8 @@ uninstall_singbox() {
   reading "\n确定要卸载吗？【y/n】: " choice
     case "$choice" in
         [Yy])
-	          bash -c 'ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk "{print \$2}" | xargs -r kill -9 >/dev/null 2>&1' >/dev/null 2>&1
-       	    rm -rf $WORKDIR && rm -rf ${FILE_PATH}/*
+	      bash -c 'ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk "{print \$2}" | xargs -r kill -9 >/dev/null 2>&1' >/dev/null 2>&1
+       	      rm -rf $WORKDIR && rm -rf ${FILE_PATH}/*
 	      clear
        	      green "Sing-box四合一已完全卸载"
           ;;
@@ -439,13 +439,15 @@ echo "$IP"
 generate_sub_link () {
 base64 -w0 list.txt > ${FILE_PATH}/${SUB_TOKEN}_v2.log
 V2rayN_LINK="https://${USERNAME}.serv00.net/${SUB_TOKEN}_v2.log"
-curl -sS "https://sublink.eooce.com/clash?config=${V2rayN_LINK}" -o ${FILE_PATH}/${SUB_TOKEN}_clash.log
-curl -sS "https://sublink.eooce.com/singbox?config=${V2rayN_LINK}" -o ${FILE_PATH}/${SUB_TOKEN}_singbox.log
-CLASH_LINK="https://mvimen.serv00.net/${SUB_TOKEN}_clash.log"
-SINGBOX_LINK="https://mvimen.serv00.net/${SUB_TOKEN}_singbox.log"
-yellow "\n节点订阅链接：\nClash: \e[1;35m${CLASH_LINK}\e[0m\n"   
-yellow "Sing-box: \e[1;35m${SINGBOX_LINK}\e[0m\n"
-yellow "V2rayN/nekoray/小火箭: \e[1;35m${V2rayN_LINK}\e[0m\n\n"
+PHP_URL="https://github.com/eooce/Sing-box/releases/download/00/get_sub.php"
+curl -sS "https://sublink.eooce.com/clash?config=${V2rayN_LINK}" -o ${FILE_PATH}/${SUB_TOKEN}_clash.yaml
+curl -sS "https://sublink.eooce.com/singbox?config=${V2rayN_LINK}" -o ${FILE_PATH}/${SUB_TOKEN}_singbox.yaml
+command -v curl &> /dev/null && curl -s -o "${FILE_PATH}/get_sub.php" "$PHP_URL" || command -v wget &> /dev/null && wget -q -O "${FILE_PATH}/get_sub.php" "$PHP_URL" || red "Warning: Neither curl nor wget is installed. You can't use the subscription"
+CLASH_LINK="https://${USERNAME}.serv00.net/get_sub.php?file=${SUB_TOKEN}_clash.yaml"
+SINGBOX_LINK="https://${USERNAME}.serv00.net/get_sub.php?file=${SUB_TOKEN}_singbox.yaml"
+yellow "\n节点订阅链接：\nClash: ${purple}${CLASH_LINK}${re}\n"   
+yellow "Sing-box: ${purple}${SINGBOX_LINK}${re}\n"
+yellow "V2rayN/Nekoray/小火箭: ${purple}${V2rayN_LINK}${re}\n\n"
 }
 
 get_links(){
@@ -494,7 +496,7 @@ menu() {
         1) install_singbox ;;
         2) uninstall_singbox ;; 
         3) cat $WORKDIR/list.txt ;; 
-	    4) kill_all_tasks ;;
+	4) kill_all_tasks ;;
         0) exit 0 ;;
         *) red "无效的选项，请输入 0 到 4" ;;
     esac
