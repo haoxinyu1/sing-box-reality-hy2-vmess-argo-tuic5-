@@ -22,9 +22,11 @@ export ARGO_AUTH=${ARGO_AUTH:-''}
 export CFIP=${CFIP:-'www.visa.com.tw'} 
 export CFPORT=${CFPORT:-'443'} 
 export SUB_TOKEN=${SUB_TOKEN:-${UUID:0:8}}
+export CHAT_ID=${CHAT_ID:-''} 
+export BOT_TOKEN=${BOT_TOKEN:-''} 
 
 [[ "$HOSTNAME" == "s1.ct8.pl" ]] && WORKDIR="${HOME}/domains/${USERNAME}.ct8.pl/logs" && FILE_PATH="${HOME}/domains/${USERNAME}.ct8.pl/public_html" || WORKDIR="${HOME}/domains/${USERNAME}.serv00.net/logs" && FILE_PATH="${HOME}/domains/${USERNAME}.serv00.net/public_html"
-rm -rf "$WORKDIR" && mkdir -p "$WORKDIR" "$FILE_PATH" && chmod 777 "$WORKDIR" "$FILE_PATH" >/dev/null 2>&1
+rm -rf "$WORKDIR" && mkdir -p "$WORKDIR" "$FILE_PATH" && chmod 777 "$WORKDIR" >/dev/null 2>&1
 bash -c 'ps aux | grep $(whoami) | grep -v "sshd\|bash\|grep" | awk "{print \$2}" | xargs -r kill -9 >/dev/null 2>&1' >/dev/null 2>&1
 
 check_binexec_and_port () {
@@ -109,11 +111,11 @@ else
     EXIST_SITE=$(devil www list | awk -v username="${USERNAME}" '$1 == username".serv00.net" {print $0}')
     if [ -n "$EXIST_SITE" ]; then
         red "不存在${USERNAME}.serv00.net的php站点,正在为你调整..."
-        devil www del "${USERNAME}.serv00.net"
-        devil www add "${USERNAME}.serv00.net" php "$HOME/domains/${USERNAME}.serv00.net"
+        devil www del "${USERNAME}.serv00.net" >/dev/null 2>&1
+        devil www add "${USERNAME}.serv00.net" php "$HOME/domains/${USERNAME}.serv00.net" >/dev/null 2>&1
         green "已删除旧站点并创建新的php站点"
     else
-        devil www add "${USERNAME}.serv00.net" php "$HOME/domains/${USERNAME}.serv00.net"
+        devil www add "${USERNAME}.serv00.net" php "$HOME/domains/${USERNAME}.serv00.net" >/dev/null 2>&1
         green "php站点创建完成"
     fi
 fi
@@ -153,7 +155,7 @@ generate_config() {
 
   yellow "获取可用IP中,请稍等..."
   available_ip=$(get_ip)
-  purple "当前选择IP为：$available_ip 如安装完后节点不通可尝试重新安装"
+  purple "当前选择IP为: $available_ip 如安装完后节点不通可尝试重新安装"
   
 cat > config.json << EOF
 {
@@ -236,7 +238,7 @@ cat > config.json << EOF
   "outbounds": [
 EOF
 
-# 如果是s14,设置 WireGuard 出站
+# 如果是s14或s15,设置 WireGuard 出站
 if [[ "$HOSTNAME" =~ s14|s15 ]]; then
   cat >> config.json << EOF
     {
@@ -452,13 +454,13 @@ curl -sS "https://sublink.eooce.com/clash?config=${V2rayN_LINK}" -o ${FILE_PATH}
 curl -sS "https://sublink.eooce.com/singbox?config=${V2rayN_LINK}" -o ${FILE_PATH}/singbox.yaml
 command -v curl &> /dev/null && curl -s -o "${FILE_PATH}/sub.php" "$PHP_URL" || command -v wget &> /dev/null && wget -q -O "${FILE_PATH}/sub.php" "$PHP_URL" || red "Warning: Neither curl nor wget is installed. You can't use the subscription"
 purple "\n自适应节点订阅链接: https://${USERNAME}.serv00.net/${SUB_TOKEN}\n"   
-green "节点订阅链接适用于 V2rayN/Nekoray/ShadowRocket/Clash/Mihomo/Sing-box/karing/Loon/sterisand 等\n"
+green "节点订阅链接适用于 V2rayN/Nekoray/ShadowRocket/Clash/Mihomo/Sing-box/karing/Loon/sterisand 等\n\n"
 }
 
 get_links(){
 argodomain=$(get_argodomain)
 echo -e "\e[1;32mArgoDomain:\e[1;35m${argodomain}\e[0m\n"
-ISP=$(curl -s --max-time 2 https://speed.cloudflare.com/meta | awk -F\" '{print $26}' | sed -e 's/ /_/g' || echo "0")
+ISP=$(curl -s --max-time 1.5 https://speed.cloudflare.com/meta | awk -F\" '{print $26}' | sed -e 's/ /_/g' || echo "0")
 get_name() { if [ "$HOSTNAME" = "s1.ct8.pl" ]; then SERVER="CT8"; else SERVER=$(echo "$HOSTNAME" | cut -d '.' -f 1); fi; echo "$SERVER"; }
 NAME="$ISP-$(get_name)"
 
@@ -474,14 +476,86 @@ tuic://$UUID:admin123@$available_ip:$TUIC_PORT?sni=www.bing.com&congestion_contr
 EOF
 cat ${FILE_PATH}/list.txt
 generate_sub_link
-yellow "\nServ00|ct8老王sing-box一键四协议安装脚本(vmess-ws|vmess-ws-tls(argo)|hysteria2|tuic)\n"
+install_keepalive
+yellow "Serv00|ct8老王sing-box一键四协议无交互安装脚本(vmess-ws|vmess-ws-tls(argo)|hysteria2|tuic)\n"
 echo -e "${green}issues反馈：${re}${yellow}https://github.com/eooce/Sing-box/issues${re}\n"
 echo -e "${green}反馈论坛：${re}${yellow}https://bbs.vps8.me${re}\n"
 echo -e "${green}TG反馈群组：${re}${yellow}https://t.me/vps888${re}\n"
 purple "转载请著名出处，请勿滥用\n"
 green "Running done!\n"
-rm -rf boot.log config.json sb.log core tunnel.yml tunnel.json fake_useragent_0.2.0.json
+rm -rf sb.log core boot.log config.json tunnel.yml tunnel.json fake_useragent_0.2.0.json
 
+}
+
+install_keepalive () {
+    purple "正在安装保活服务中,请稍等......"
+    keep_path="$HOME/domains/keep.${USERNAME}.serv00.net/public_nodejs"
+    [ -d "$keep_path" ] || mkdir -p "$keep_path"
+    app_file_url="https://00.2go.us.kg/app.js"
+
+    if command -v curl &> /dev/null; then
+        curl -s -o "${keep_path}/app.js" "$app_file_url"
+    elif command -v wget &> /dev/null; then
+        wget -q -O "${keep_path}/app.js" "$app_file_url"
+    else
+        echo "警告: 文件下载失败,请手动从https://00.2go.us.kg/app.js下载文件,并将文件上传到${keep_path}目录下"
+        return
+    fi
+
+    cat > ${keep_path}/.env <<EOF
+UUID=$UUID
+CFIP=${CFIP}
+CFPORT=${CFPORT}
+SUB_TOKEN=${UUID:0:8}
+TELEGRAM_CHAT_ID=${CHAT_ID}
+TELEGRAM_BOT_TOKEN=${BOT_TOKEN}
+NEZHA_SERVER=${NEZHA_SERVER}
+NEZHA_PORT=${NEZHA_PORT}
+NEZHA_KEY=${NEZHA_KEY}
+ARGO_DOMAIN=${ARGO_DOMAIN}
+ARGO_AUTH=$([[ -z "$ARGO_AUTH" ]] && echo "" || ([[ "$ARGO_AUTH" =~ ^\{.* ]] && echo "'$ARGO_AUTH'" || echo "$ARGO_AUTH"))
+EOF
+    devil www add ${USERNAME}.serv00.net php > /dev/null 2>&1
+    devil www add keep.${USERNAME}.serv00.net nodejs /usr/local/bin/node18 > /dev/null 2>&1
+    ip_address=$(devil vhost list | sed -n '5p' | awk '{print $1}')
+    devil ssl www add $ip_address le le keep.${USERNAME}.serv00.net > /dev/null 2>&1
+    ln -fs /usr/local/bin/node18 ~/bin/node > /dev/null 2>&1
+    ln -fs /usr/local/bin/npm18 ~/bin/npm > /dev/null 2>&1
+    mkdir -p ~/.npm-global
+    npm config set prefix '~/.npm-global'
+    echo 'export PATH=~/.npm-global/bin:~/bin:$PATH' >> $HOME/.bash_profile && source $HOME/.bash_profile
+    rm -rf $HOME/.npmrc > /dev/null 2>&1
+    cd ${keep_path} && npm install dotenv axios --silent > /dev/null 2>&1
+    rm $HOME/domains/keep.${USERNAME}.serv00.net/public_nodejs/public/index.html > /dev/null 2>&1
+    devil www options keep.${USERNAME}.serv00.net sslonly on > /dev/null 2>&1
+    if devil www restart keep.${USERNAME}.serv00.net 2>&1 | grep -q "succesfully"; then
+        green "\n全自动保活服务安装成功\n"
+        green "========================================================\n"
+        purple "访问 https://keep.${USERNAME}.serv00.net/stop 结束进程\n"
+        purple "访问 https://keep.${USERNAME}.serv00.net/list 全部进程列表\n"
+        yellow "访问 https://keep.${USERNAME}.serv00.net/start 调起保活程序\n"
+        purple "访问 https://keep.${USERNAME}.serv00.net/status 查看进程状态\n"
+        green "========================================================"
+        yellow "如发现掉线访问https://keep.${USERNAME}.serv00.net/start唤醒,或者用https://console.cron-job.org在线访问网页自动唤醒\n"
+        purple "如果需要Telegram通知，请先在Telegram @Botfather 申请 Bot-Token，并带CHAT_ID和BOT_TOKEN环境变量运行\n\n"
+        quick_command
+    else
+        red "全自动保活服务安装失败,请删除所有文件夹后重试\n"
+    fi
+}
+
+quick_command() {
+  COMMAND="00"
+  SCRIPT_PATH="$HOME/bin/$COMMAND"
+  mkdir -p "$HOME/bin"
+  echo "#!/bin/bash" > "$SCRIPT_PATH"
+  echo "bash <(curl -Ls https://raw.githubusercontent.com/eooce/sing-box/main/sb_serv00.sh)" >> "$SCRIPT_PATH"
+  chmod +x "$SCRIPT_PATH"
+  if [[ ":$PATH:" != *":$HOME/bin:"* ]]; then
+      echo "export PATH=\"\$HOME/bin:\$PATH\"" >> "$HOME/.bashrc"
+      source "$HOME/.bashrc"
+  fi
+  green "快捷指令00创建成功\n"
 }
 
 install_singbox() {
