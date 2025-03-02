@@ -13,8 +13,7 @@ reading() { read -p "$(red "$1")" "$2"; }
 export LC_ALL=C
 HOSTNAME=$(hostname)
 USERNAME=$(whoami | tr '[:upper:]' '[:lower:]')
-MD5_HASH=$(echo -n "$USERNAME" | md5sum | awk '{print $1}')
-export UUID=${UUID:-${MD5_HASH:0:8}-${MD5_HASH:8:4}-4${MD5_HASH:12:3}-$(echo $((RANDOM % 4 + 8)) | head -c 1)${MD5_HASH:15:3}-${MD5_HASH:19:12}}
+export UUID=${UUID:-$(uuidgen)}  
 export NEZHA_SERVER=${NEZHA_SERVER:-''}  # v1哪吒形式：nezha.abc.com:8008,v0哪吒形式：nezha.abc.com
 export NEZHA_PORT=${NEZHA_PORT:-''}      # v1哪吒不需要此变量
 export NEZHA_KEY=${NEZHA_KEY:-''}        # v1的NZ_CLIENT_SECRET或v0的agent密钥
@@ -27,8 +26,9 @@ export UPLOAD_URL=${UPLOAD_URL:-''}  # 订阅自动添加到汇聚订阅器，�
 
 [[ "$HOSTNAME" == "s1.ct8.pl" ]] && WORKDIR="${HOME}/domains/${USERNAME}.ct8.pl/logs" && FILE_PATH="${HOME}/domains/${USERNAME}.ct8.pl/public_html" || WORKDIR="${HOME}/domains/${USERNAME}.serv00.net/logs" && FILE_PATH="${HOME}/domains/${USERNAME}.serv00.net/public_html"
 rm -rf "$WORKDIR" && mkdir -p "$WORKDIR" "$FILE_PATH" && chmod 777 "$WORKDIR" "$FILE_PATH" >/dev/null 2>&1
+command -v curl &>/dev/null && COMMAND="curl -so" || command -v wget &>/dev/null && COMMAND="wget -qO" || { red "Error: neither curl nor wget found, please install one of them." >&2; exit 1; }
 
-check_binexec_and_port () {
+check_port () {
 port_list=$(devil port list)
 tcp_ports=$(echo "$port_list" | grep -c "tcp")
 udp_ports=$(echo "$port_list" | grep -c "udp")
@@ -147,6 +147,8 @@ else
         green "php站点创建完成"
     fi
 fi
+index_url="https://github.com/eooce/Sing-box/releases/download/00/index.html"
+[ -f "${FILE_PATH}/index.html" ] || $COMMAND "${FILE_PATH}/index.html" "$index_url"
 }
 
 read_nz_variables() {
@@ -177,8 +179,9 @@ echo -e "${yellow}本脚本同时四协议共存${purple}(vmess-ws,vmess-ws-tls(
 reading "\n确定继续安装吗？(直接回车即确认安装)【y/n】: " choice
   case "${choice:-y}" in
     [Yy]|"")
+    	clear
         cd $WORKDIR
-        check_binexec_and_port
+        check_port
         check_website
         read_nz_variables
         argo_configure
@@ -219,7 +222,7 @@ reading "\n确定重置系统吗吗？【y/n】: " choice
           find "${HOME}" -mindepth 1 ! -name "domains" ! -name "mail" ! -name "repo" ! -name "backups" ! -name ".*" -exec rm -rf {} + > /dev/null 2>&1
           devil www del $USERNAME.serv00.net > /dev/null 2>&1
           devil www del keep.$USERNAME.serv00.net > /dev/null 2>&1
-          rm -rf $HOME/$USERNAME/domains/* > /dev/null 2>&1
+          rm -rf $HOME/domains/* > /dev/null 2>&1
           green "\n初始化系统完成!\n"
          ;;
        *) menu ;;
@@ -592,18 +595,30 @@ echo "$IP"
 }
 
 generate_sub_link () {
-cat >> ${FILE_PATH}/.htaccess << EOF
+echo ""
+cat > ${FILE_PATH}/.htaccess << EOF
 RewriteEngine On
-RewriteRule ^${SUB_TOKEN}$ sub.php [L]
+RewriteRule ^${SUB_TOKEN}$ ${SUB_TOKEN}.php [L]
+<FilesMatch "^(clash\.yaml|singbox\.yaml|list\.txt|v2\.log||sub\.php)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+<Files "${SUB_TOKEN}.php">
+    Order Allow,Deny
+    Allow from all
+</Files>
 EOF
 base64 -w0 ${FILE_PATH}/list.txt > ${FILE_PATH}/v2.log
 V2rayN_LINK="https://${USERNAME}.serv00.net/v2.log"
-PHP_URL="https://00.ssss.nyc.mn/sub.php"        
+PHP_URL="https://00.ssss.nyc.mn/sub.php"
+QR_URL="https://00.ssss.nyc.mn/qrencode"  
+$COMMAND "${FILE_PATH}/${SUB_TOKEN}.php" "$PHP_URL" 
+$COMMAND "${WORKDIR}/qrencode" "$QR_URL" && chmod +x "${WORKDIR}/qrencode"
 curl -sS "https://sublink.eooce.com/clash?config=${V2rayN_LINK}" -o ${FILE_PATH}/clash.yaml
 curl -sS "https://sublink.eooce.com/singbox?config=${V2rayN_LINK}" -o ${FILE_PATH}/singbox.yaml
-command -v curl &> /dev/null && curl -s -o "${FILE_PATH}/sub.php" "$PHP_URL" || command -v wget &> /dev/null && wget -q -O "${FILE_PATH}/sub.php" "$PHP_URL" || red "Warning: Neither curl nor wget is installed. You can't use the subscription"
-purple "\n自适应节点订阅链接: https://${USERNAME}.serv00.net/${SUB_TOKEN}\n"   
-green "节点订阅链接适用于 V2rayN/Nekoray/ShadowRocket/Clash/Mihomo/Sing-box/karing/Loon/sterisand 等\n"
+"${WORKDIR}/qrencode" -m 2 -t UTF8 "https://${USERNAME}.serv00.net/${SUB_TOKEN}"
+purple "\n自适应节点订阅链接: https://${USERNAME}.serv00.net/${SUB_TOKEN}\n"
+green "二维码和节点订阅链接适用于 V2rayN/Nekoray/ShadowRocket/Clash/Mihomo/Sing-box/karing/Loon/sterisand 等\n\n"
 }
 
 get_links(){
@@ -678,18 +693,10 @@ install_keepalive () {
     keep_path="$HOME/domains/keep.${USERNAME}.serv00.net/public_nodejs"
     [ -d "$keep_path" ] || mkdir -p "$keep_path"
     app_file_url="https://00.ssss.nyc.mn/app.js"
-
-    if command -v curl &> /dev/null; then
-        curl -s -o "${keep_path}/app.js" "$app_file_url"
-    elif command -v wget &> /dev/null; then
-        wget -q -O "${keep_path}/app.js" "$app_file_url"
-    else
-        echo "警告: 文件下载失败,请手动从https://00.ssss.nyc.mn/app.js下载文件,并将文件上传到${keep_path}目录下"
-        return
-    fi
+    $COMMAND "${keep_path}/app.js" "$app_file_url"
 
     cat > ${keep_path}/.env <<EOF
-UUID=$UUID
+UUID=${UUID}
 CFIP=${CFIP}
 CFPORT=${CFPORT}
 SUB_TOKEN=${UUID:0:8}
@@ -703,9 +710,17 @@ ARGO_DOMAIN=$argo_domain
 ARGO_AUTH=$([[ -z "$argo_key" ]] && echo "" || ([[ "$argo_key" =~ ^\{.* ]] && echo "'$argo_key'" || echo "$argo_key"))
 EOF
 
-cat >> ${FILE_PATH}/.htaccess << EOF
+cat > ${FILE_PATH}/.htaccess << EOF
 RewriteEngine On
-RewriteRule ^${SUB_TOKEN}$ sub.php [L]
+RewriteRule ^${SUB_TOKEN}$ ${SUB_TOKEN}.php [L]
+<FilesMatch "^(clash\.yaml|singbox\.yaml|list\.txt|v2\.log||sub\.php)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+<Files "${SUB_TOKEN}.php">
+    Order Allow,Deny
+    Allow from all
+</Files>
 EOF
     devil www add keep.${USERNAME}.serv00.net nodejs /usr/local/bin/node18 > /dev/null 2>&1
   # devil ssl www add $available_ip le le keep.${USERNAME}.serv00.net > /dev/null 2>&1
@@ -718,17 +733,19 @@ EOF
     cd ${keep_path} && npm install dotenv axios --silent > /dev/null 2>&1
     rm $HOME/domains/keep.${USERNAME}.serv00.net/public_nodejs/public/index.html > /dev/null 2>&1
     devil www options keep.${USERNAME}.serv00.net sslonly on > /dev/null 2>&1
-    if devil www restart keep.${USERNAME}.serv00.net 2>&1 | grep -q "succesfully"; then
-        green "\n全自动保活服务安装成功\n\n"
+    devil www restart keep.${USERNAME}.serv00.net > /dev/null 2>&1
+    generate_sub_link
+    if curl -skL "http://keep.${USERNAME}.serv00.net/start" | grep -q "running"; then
+        green "\n全自动保活服务安装成功\n"
+	green "所有服务都运行正常,全自动保活任务添加成功\n\n"
         purple "访问 http://keep.${USERNAME}.serv00.net/stop 结束进程\n"
         purple "访问 http://keep.${USERNAME}.serv00.net/list 全部进程列表\n"
         yellow "访问 http://keep.${USERNAME}.serv00.net/start 调起保活程序\n"
         purple "访问 http://keep.${USERNAME}.serv00.net/status 查看进程状态\n\n"
-        curl -sL -A "Mozilla/5.0" "http://keep.${USERNAME}.serv00.net/start" | grep -q "running" && green "\n所有服务都运行正常,全自动保活任务添加成功\n" || red "\n存在未运行的进程,请访问 http://keep.${USERNAME}.serv00.net/status 检查,建议执行以下命令后重装: \ndevil www del $USERNAME.serv00.net\ndevil www del keep.$USERNAME.serv00.net\nrm -rf $HOME/$USERNAME/domains/*\nshopt -s extglob dotglob\nrm -rf $HOME/!(domains|mail|repo|backup)\n"
-        purple "如果需要TG通知,在https://t.me/laowang_serv00_bot获取CHAT_ID,并带CHAT_ID环境变量运行\n\n"
+        purple "如果需要TG通知,在${yellow}https://t.me/laowang_serv00_bot${re}${purple}获取CHAT_ID,并带CHAT_ID环境变量运行${re}\n\n"
         quick_command
     else
-        red "全自动保活服务安装失败: \n${yellow}devil www del $USERNAME.serv00.net\ndevil www del keep.$USERNAME.serv00.net\nrm -rf $HOME/$USERNAME/domains/*\nshopt -s extglob dotglob\nrm -rf $HOME/!(domains|mail|repo|backup)\n${red}请依次执行上述命令后重新安装!"
+        red "\n全自动保活服务安装失败,存在未运行的进程,请执行以下命令后重装: \n\ndevil www del ${USERNAME}.serv00.net\ndevil www del keep.${USERNAME}.serv00.net\nrm -rf $HOME/domains/*\nshopt -s extglob dotglob\nrm -rf $HOME/!(domains|mail|repo|backups)\n\n"
     fi
 }
 
@@ -756,6 +773,12 @@ get_url_info() {
   else 
     red "尚未安装自动保活服务\n" && sleep 2 && menu
   fi
+}
+
+get_nodes(){
+cat ${FILE_PATH}/list.txt
+TOKEN=$(sed -n 's/^SUB_TOKEN=\(.*\)/\1/p' $HOME/domains/keep.${USERNAME}.serv00.net/public_nodejs/.env)
+yellow "\n自适应节点订阅链接: https://${USERNAME}.serv00.net/${TOKEN}\n二维码和节点订阅链接适用于V2rayN/Nekoray/ShadowRocket/Clash/Sing-box/karing/Loon/sterisand 等\n"
 }
 
 menu() {
@@ -789,7 +812,7 @@ menu() {
       1) install_singbox ;;
       2) install_keepalive ;;
       3) uninstall_singbox ;; 
-      4) cat ${FILE_PATH}/list.txt && yellow "\n自适应节点订阅链接: https://${USERNAME}.serv00.net/${SUB_TOKEN}\n节点订阅链接适用于V2rayN/Nekoray/ShadowRocket/Clash/Sing-box/karing/Loon/sterisand 等\n";; 
+      4) get_nodes ;; 
       5) get_url_info ;;
       6) changge_ports ;;
       7) reset_system ;;
