@@ -26,7 +26,7 @@ export UPLOAD_URL=${UPLOAD_URL:-''}  # 订阅自动添加到汇聚订阅器，�
 
 if [[ "$HOSTNAME" =~ ct8 ]]; then
     CURRENT_DOMAIN="ct8.pl"
-elif [[ "$HOSTNAME" =~ useruno ]]; then
+elif [[ "$HOSTNAME" =~ hostuno ]]; then
     CURRENT_DOMAIN="useruno.com"
 else
     CURRENT_DOMAIN="serv00.net"
@@ -733,7 +733,6 @@ quick_command() {
   fi
   green "快捷指令00创建成功,下次运行输入00快速进入菜单\n"
 }
-
 
 get_url_info() {
   if devil www list 2>&1 | grep -q "keep.${USERNAME}.${CURRENT_DOMAIN}"; then
