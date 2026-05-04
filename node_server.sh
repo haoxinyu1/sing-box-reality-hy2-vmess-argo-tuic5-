@@ -43,6 +43,8 @@ WS_PATH=${WS_PATH}
 SERVER_ADDR=${SERVER_ADDR}
 TLS_DOMAIN=${TLS_DOMAIN}
 COUNTRY_CODE=${COUNTRY_CODE}
+NODE_NAME=${NODE_NAME}
+S5_PORT=${S5_PORT}
 EOF
   chmod 600 "${STATE_FILE}"
 }
@@ -205,6 +207,18 @@ write_config() {
         "certificate_path": "${CERT_FILE}",
         "key_path": "${KEY_FILE}"
       }
+    },
+    {
+      "tag": "s5-in",
+      "type": "socks",
+      "listen": "::",
+      "listen_port": ${S5_PORT},
+      "users": [
+        {
+          "username": "${UUID:0:8}",
+          "password": "${UUID: -12}"
+        }
+      ]
     }
   ],
   "outbounds": [
@@ -339,19 +353,26 @@ remove_autostart() {
 # ── 节点输出 ──────────────────────────────────────────────────────────────────
 
 print_node() {
-  local name encoded_path node
-  name="${COUNTRY_CODE:-XX}-${UUID:0:8}"
+  local name encoded_path vless_node s5_node
+  name="${COUNTRY_CODE:-XX}-${NODE_NAME}"
   encoded_path=$(printf '%s' "${WS_PATH}" | sed 's|/|%2F|g')
-  node="vless://${UUID}@${SERVER_ADDR}:${NODE_PORT}?encryption=none&security=tls&sni=${TLS_DOMAIN}&type=ws&host=${TLS_DOMAIN}&path=${encoded_path}&fp=chrome&allowInsecure=1#${name}"
+  vless_node="vless://${UUID}@${SERVER_ADDR}:${NODE_PORT}?encryption=none&security=tls&sni=${TLS_DOMAIN}&type=ws&host=${TLS_DOMAIN}&path=${encoded_path}&fp=chrome&allowInsecure=1#${name}"
+  s5_node="socks5://${UUID:0:8}:${UUID: -12}@${SERVER_ADDR}:${S5_PORT}#${name}"
   echo
   echo "=============================="
-  echo "节点 (VLESS+WS+TLS):"
-  echo "${node}"
+  echo "VLESS+WS+TLS:"
+  echo "${vless_node}"
+  echo
+  echo "SOCKS5:"
+  echo "${s5_node}"
   echo "=============================="
-  echo "地址: ${SERVER_ADDR}:${NODE_PORT}"
+  echo "地址: ${SERVER_ADDR}"
+  echo "VLESS 端口: ${NODE_PORT}"
+  echo "SOCKS5 端口: ${S5_PORT}"
   echo "UUID: ${UUID}"
-  echo "路径: ${WS_PATH}"
-  echo "TLS : 自签证书，客户端需开启 allowInsecure"
+  echo "WS 路径: ${WS_PATH}"
+  echo "TLS SNI: ${TLS_DOMAIN}"
+  echo "自签证书，客户端需开启 allowInsecure"
   echo
 }
 
@@ -369,6 +390,8 @@ install_flow() {
   # 生成节点参数
   UUID=$(generate_uuid)
   NODE_PORT=$(prompt_with_default "请输入节点端口" "8080")
+  NODE_NAME=$(prompt_with_default "请输入节点名称" "node")
+  S5_PORT=$(prompt_with_default "请输入 SOCKS5 端口" "$((NODE_PORT + 1))")
   WS_PATH=$(generate_ws_path)
 
   echo "正在获取服务器信息..."
