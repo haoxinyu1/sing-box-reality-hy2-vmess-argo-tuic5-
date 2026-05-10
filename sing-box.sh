@@ -132,15 +132,16 @@ get_realip() {
     ipv6() { curl -6 -sm 2 ip.sb; }
     if [ -z "$ip" ]; then
         echo "[$(ipv6)]"
-    elif curl -4 -sm 2 http://ipinfo.io/org | grep -qE 'Cloudflare|UnReal|AEZA|Andrei'; then
-        echo "[$(ipv6)]"
-    else
-        resp=$(curl -sm 8 "https://status.eooce.com/api/$ip" | jq -r '.status')
-        if [ "$resp" = "Available" ]; then
-            echo "$ip"
+    else 
+        if curl -4 -sm 2 http://ipinfo.io/org | grep -qE 'Cloudflare|UnReal|AEZA|Andrei'; then
+            echo "[$(ipv6)]"
         else
-            v6=$(ipv6)
-            [ -n "$v6" ] && echo "[$v6]" || echo "$ip"
+            if grep -qE '^\s*precedence\s+::ffff:0:0/96\s+100' "/etc/gai.conf" 2>/dev/null; then
+                echo "$ip"
+            else
+                v6=$(ipv6)
+                [ -n "$v6" ] && echo "[$v6]" || echo "$ip"
+            fi
         fi
     fi
 }
