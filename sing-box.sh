@@ -3,7 +3,7 @@
 # =========================
 # 老王sing-box四合一安装脚本
 # vless-version-reality|vmess-ws-tls(tunnel)|hysteria2|tuic5
-# 最后更新时间: 2026.3.05
+# 最后更新时间: 2026.5.12
 # =========================
 
 export LANG=en_US.UTF-8
@@ -24,10 +24,10 @@ reading() { read -p "$(red "$1")" "$2"; }
 # 定义常量
 server_name="sing-box"
 work_dir="/etc/sing-box"
-config_dir="${work_dir}/config.json"
+conf_dir="${work_dir}/conf"
 client_dir="${work_dir}/url.txt"
 export vless_port=${PORT:-$(shuf -i 1000-65000 -n 1)}
-export CFIP=${CFIP:-'cf.877774.xyz'} 
+export CFIP=${CFIP:-'cdns.doon.eu.org'} 
 export CFPORT=${CFPORT:-'443'} 
 
 # 检查是否为root下运行
@@ -69,7 +69,7 @@ check_nginx() {
     check_service "nginx" "$(command -v nginx)"
 }
 
-#根据系统类型安装、卸载依赖
+# 根据系统类型安装、卸载依赖
 manage_packages() {
     if [ $# -lt 2 ]; then
         red "Unspecified package name or action" 
@@ -217,19 +217,19 @@ install_singbox() {
     esac
 
     # 下载sing-box,cloudflared
-    [ ! -d "${work_dir}" ] && mkdir -p "${work_dir}" && chmod 777 "${work_dir}"
+    [ ! -d "${work_dir}" ] && mkdir -p "${work_dir}" && chmod 777 "${work_dir}" && mkdir -p "${conf_dir}"
     # latest_version=$(curl -s "https://api.github.com/repos/SagerNet/sing-box/releases" | jq -r '[.[] | select(.prerelease==false)][0].tag_name | sub("^v"; "")')
     # curl -sLo "${work_dir}/${server_name}.tar.gz" "https://github.com/SagerNet/sing-box/releases/download/v${latest_version}/sing-box-${latest_version}-linux-${ARCH}.tar.gz"
     # curl -sLo "${work_dir}/qrencode" "https://github.com/eooce/test/releases/download/${ARCH}/qrencode-linux-${ARCH}"
-    curl -sLo "${work_dir}/qrencode" "https://$ARCH.ssss.nyc.mn/qrencode"
-    curl -sLo "${work_dir}/sing-box" "https://$ARCH.ssss.nyc.mn/sb"
     curl -sLo "${work_dir}/argo" "https://$ARCH.ssss.nyc.mn/bot"
+    curl -sLo "${work_dir}/sing-box" "https://$ARCH.ssss.nyc.mn/sb"
+    curl -sLo "${work_dir}/qrencode" "https://$ARCH.ssss.nyc.mn/qrencode"
     # tar -xzvf "${work_dir}/${server_name}.tar.gz" -C "${work_dir}/" && \
     # mv "${work_dir}/sing-box-${latest_version}-linux-${ARCH}/sing-box" "${work_dir}/" && \
     # rm -rf "${work_dir}/${server_name}.tar.gz" "${work_dir}/sing-box-${latest_version}-linux-${ARCH}"
     chown root:root ${work_dir} && chmod +x ${work_dir}/${server_name} ${work_dir}/argo ${work_dir}/qrencode
 
-   # 生成随机端口和密码
+    # 生成随机端口和密码
     nginx_port=$(($vless_port + 1)) 
     tuic_port=$(($vless_port + 2))
     hy2_port=$(($vless_port + 3)) 
@@ -249,15 +249,20 @@ install_singbox() {
     # 检测网络类型并设置DNS策略
     dns_strategy=$(ping -c 1 -W 3 8.8.8.8 >/dev/null 2>&1 && echo "prefer_ipv4" || (ping -c 1 -W 3 2001:4860:4860::8888 >/dev/null 2>&1 && echo "prefer_ipv6" || echo "prefer_ipv4"))
 
-   # 生成配置文件
-cat > "${config_dir}" << EOF
+    # 生成配置文件
+    cat > "${conf_dir}/log.json" << EOF
 {
   "log": {
     "disabled": false,
     "level": "error",
     "output": "$work_dir/sb.log",
     "timestamp": true
-  },
+  }
+}
+EOF
+
+    cat > "${conf_dir}/dns.json" << EOF
+{
   "dns": {
     "servers": [
       {
@@ -266,7 +271,12 @@ cat > "${config_dir}" << EOF
         "strategy": "$dns_strategy"
       }
     ]
-  },
+  }
+}
+EOF
+
+    cat > "${conf_dir}/inbounds.json" << EOF
+{
   "inbounds": [
     {
       "type": "vless",
@@ -338,7 +348,7 @@ cat > "${config_dir}" << EOF
       "users": [
         {
           "uuid": "$uuid",
-          "password": "$password"
+          "password": "$uuid"
         }
       ],
       "congestion_control": "bbr",
@@ -349,7 +359,23 @@ cat > "${config_dir}" << EOF
         "key_path": "$work_dir/private.key"
       }
     }
-  ],
+  ]
+}
+EOF
+
+    cat > "${conf_dir}/outbounds.json" << EOF
+{
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ]
+}
+EOF
+
+    cat > "${conf_dir}/endpoints.json" << EOF
+{
   "endpoints": [
     {
       "type": "wireguard",
@@ -377,20 +403,68 @@ cat > "${config_dir}" << EOF
         }
       ]
     }
-  ],
-  "outbounds": [
-    {
-      "type": "direct",
-      "tag": "direct"
-    }
-  ],
+  ]
+}
+EOF
+
+    cat > "${conf_dir}/route.json" << EOF
+{
   "route": {
     "rule_set": [
+      {
+        "tag": "gemini",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://main.ssss.nyc.mn/gemini.srs",
+        "download_detour": "direct"
+      },
+      {
+        "tag": "claude",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://main.ssss.nyc.mn/claude.srs",
+        "download_detour": "direct"
+      },
       {
         "tag": "openai",
         "type": "remote",
         "format": "binary",
         "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geosite/openai.srs",
+        "download_detour": "direct"
+      },
+      {
+        "tag": "tiktok",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geosite/tiktok.srs",
+        "download_detour": "direct"
+      },
+      {
+        "tag": "twitter",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geosite/twitter.srs",
+        "download_detour": "direct"
+      },
+      {
+        "tag": "google",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geosite/google.srs",
+        "download_detour": "direct"
+      },
+      {
+        "tag": "telegram",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geosite/telegram.srs",
+        "download_detour": "direct"
+      },
+      {
+        "tag": "youtube",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geosite/youtube.srs",
         "download_detour": "direct"
       },
       {
@@ -403,7 +477,7 @@ cat > "${config_dir}" << EOF
     ],
     "rules": [
       {
-        "rule_set": ["openai", "netflix"],
+        "rule_set": [],
         "outbound": "wireguard-out"
       }
     ],
@@ -411,7 +485,9 @@ cat > "${config_dir}" << EOF
   }
 }
 EOF
+
 }
+
 # debian/ubuntu/centos 守护进程
 main_systemd_services() {
     cat > /etc/systemd/system/sing-box.service << EOF
@@ -425,7 +501,7 @@ User=root
 WorkingDirectory=/etc/sing-box
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
-ExecStart=/etc/sing-box/sing-box run -c /etc/sing-box/config.json
+ExecStart=/etc/sing-box/sing-box run -C /etc/sing-box/conf
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=on-failure
 RestartSec=10
@@ -465,6 +541,7 @@ EOF
     systemctl enable argo
     systemctl start argo
 }
+
 # 适配alpine 守护进程
 alpine_openrc_services() {
     cat > /etc/init.d/sing-box << 'EOF'
@@ -472,7 +549,7 @@ alpine_openrc_services() {
 
 description="sing-box service"
 command="/etc/sing-box/sing-box"
-command_args="run -c /etc/sing-box/config.json"
+command_args="run -C /etc/sing-box/conf"
 command_background=true
 pidfile="/var/run/sing-box.pid"
 EOF
@@ -526,7 +603,7 @@ vmess://$(echo "$VMESS" | base64 -w0)
 
 hysteria2://${uuid}@${server_ip}:${hy2_port}/?sni=www.bing.com&insecure=1&alpn=h3&obfs=none#${isp}
 
-tuic://${uuid}:${password}@${server_ip}:${tuic_port}?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#${isp}
+tuic://${uuid}:${uuid}@${server_ip}:${tuic_port}?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#${isp}
 EOF
 echo ""
 while IFS= read -r line; do echo -e "${purple}$line"; done < ${work_dir}/url.txt
@@ -568,7 +645,6 @@ server {
     listen [::]:$nginx_port;
     server_name _;
 
-    # 安全设置
     add_header X-Frame-Options DENY;
     add_header X-Content-Type-Options nosniff;
     add_header X-XSS-Protection "1; mode=block";
@@ -585,7 +661,6 @@ server {
         return 404;
     }
 
-    # 禁止访问隐藏文件
     location ~ /\. {
         deny all;
         access_log off;
@@ -594,11 +669,9 @@ server {
 }
 EOF
 
-    # 检查主配置文件是否存在
     if [ -f "/etc/nginx/nginx.conf" ]; then
         cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bak.sb > /dev/null 2>&1
         sed -i -e '15{/include \/etc\/nginx\/modules\/\*\.conf/d;}' -e '18{/include \/etc\/nginx\/conf\.d\/\*\.conf/d;}' /etc/nginx/nginx.conf > /dev/null 2>&1
-        # 检查是否已包含配置目录
         if ! grep -q "include.*conf.d" /etc/nginx/nginx.conf; then
             http_end_line=$(grep -n "^}" /etc/nginx/nginx.conf | tail -1 | cut -d: -f1)
             if [ -n "$http_end_line" ]; then
@@ -633,9 +706,7 @@ http {
 EOF
     fi
 
-    # 检查nginx配置语法
     if nginx -t > /dev/null 2>&1; then
-    
         if nginx -s reload > /dev/null 2>&1; then
             green "nginx订阅配置已加载"
         else
@@ -801,23 +872,16 @@ uninstall_singbox() {
                 rc-update del sing-box default
                 rc-update del argo default
            else
-                # 停止 sing-box和 argo 服务
                 systemctl stop "${server_name}"
                 systemctl stop argo
-                # 禁用 sing-box 服务
                 systemctl disable "${server_name}"
                 systemctl disable argo
-
-                # 重新加载 systemd
                 systemctl daemon-reload || true
             fi
-           # 删除配置文件和日志
            rm -rf "${work_dir}" || true
-           rm -rf "${log_dir}" || true
            rm -rf /etc/systemd/system/sing-box.service /etc/systemd/system/argo.service > /dev/null 2>&1
-           rm  -rf /etc/nginx/conf.d/sing-box.conf > /dev/null 2>&1
+           rm -rf /etc/nginx/conf.d/sing-box.conf > /dev/null 2>&1
            
-           # 卸载Nginx
            reading "\n是否卸载 Nginx？${green}(卸载请输入 ${yellow}y${re} ${green}回车将跳过卸载Nginx) (y/n): ${re}" choice
             case "${choice}" in
                 y|Y)
@@ -859,9 +923,8 @@ change_hosts() {
     sed -i '2s/.*/::1         localhost/' /etc/hosts
 }
 
-# 变更配置
+# 变更配置（适配conf目录）
 change_config() {
-    # 检查sing-box状态
     local singbox_status=$(check_singbox 2>/dev/null)
     local singbox_installed=$?
     
@@ -905,11 +968,14 @@ change_config() {
             purple "0. 返回上一级菜单"
             skyblue "------------"
             reading "请输入选择: " choice
+            local inbounds_file="${conf_dir}/inbounds.json"
             case "${choice}" in
                 1)
                     reading "\n请输入vless-reality端口 (回车跳过将使用随机端口): " new_port
                     [ -z "$new_port" ] && new_port=$(shuf -i 2000-65000 -n 1)
-                    sed -i '/"type": "vless"/,/listen_port/ s/"listen_port": [0-9]\+/"listen_port": '"$new_port"'/' $config_dir
+                    jq --arg port "$new_port" \
+                       '(.inbounds[] | select(.type == "vless").listen_port) = ($port | tonumber)' \
+                       "$inbounds_file" > "${inbounds_file}.tmp" && mv "${inbounds_file}.tmp" "$inbounds_file"
                     restart_singbox
                     allow_port $new_port/tcp > /dev/null 2>&1
                     sed -i 's/\(vless:\/\/[^@]*@[^:]*:\)[0-9]\{1,\}/\1'"$new_port"'/' $client_dir
@@ -920,7 +986,9 @@ change_config() {
                 2)
                     reading "\n请输入hysteria2端口 (回车跳过将使用随机端口): " new_port
                     [ -z "$new_port" ] && new_port=$(shuf -i 2000-65000 -n 1)
-                    sed -i '/"type": "hysteria2"/,/listen_port/ s/"listen_port": [0-9]\+/"listen_port": '"$new_port"'/' $config_dir
+                    jq --arg port "$new_port" \
+                       '(.inbounds[] | select(.type == "hysteria2").listen_port) = ($port | tonumber)' \
+                       "$inbounds_file" > "${inbounds_file}.tmp" && mv "${inbounds_file}.tmp" "$inbounds_file"
                     restart_singbox
                     allow_port $new_port/udp > /dev/null 2>&1
                     sed -i 's/\(hysteria2:\/\/[^@]*@[^:]*:\)[0-9]\{1,\}/\1'"$new_port"'/' $client_dir
@@ -931,7 +999,9 @@ change_config() {
                 3)
                     reading "\n请输入tuic端口 (回车跳过将使用随机端口): " new_port
                     [ -z "$new_port" ] && new_port=$(shuf -i 2000-65000 -n 1)
-                    sed -i '/"type": "tuic"/,/listen_port/ s/"listen_port": [0-9]\+/"listen_port": '"$new_port"'/' $config_dir
+                    jq --arg port "$new_port" \
+                       '(.inbounds[] | select(.type == "tuic").listen_port) = ($port | tonumber)' \
+                       "$inbounds_file" > "${inbounds_file}.tmp" && mv "${inbounds_file}.tmp" "$inbounds_file"
                     restart_singbox
                     allow_port $new_port/udp > /dev/null 2>&1
                     sed -i 's/\(tuic:\/\/[^@]*@[^:]*:\)[0-9]\{1,\}/\1'"$new_port"'/' $client_dir
@@ -942,7 +1012,9 @@ change_config() {
                 4)  
                     reading "\n请输入vmess-argo端口 (回车跳过将使用随机端口): " new_port
                     [ -z "$new_port" ] && new_port=$(shuf -i 2000-65000 -n 1)
-                    sed -i '/"type": "vmess"/,/listen_port/ s/"listen_port": [0-9]\+/"listen_port": '"$new_port"'/' $config_dir
+                    jq --arg port "$new_port" \
+                       '(.inbounds[] | select(.type == "vmess").listen_port) = ($port | tonumber)' \
+                       "$inbounds_file" > "${inbounds_file}.tmp" && mv "${inbounds_file}.tmp" "$inbounds_file"
                     allow_port $new_port/tcp > /dev/null 2>&1
                     if command_exists rc-service; then
                         if grep -q "localhost:" /etc/init.d/argo; then
@@ -957,17 +1029,6 @@ change_config() {
                             change_argo_domain 
                         fi
                     fi
-
-                    if [ -f /etc/sing-box/tunnel.yml ]; then
-                        sed -i 's/localhost:[0-9]\{1,\}/localhost:'"$new_port"'/' /etc/sing-box/tunnel.yml
-                        restart_argo
-                    fi
-
-                    if ([ -f /etc/systemd/system/argo.service ] && grep -q -- "--token" /etc/systemd/system/argo.service) || \
-                       ([ -f /etc/init.d/argo ] && grep -q -- "--token" /etc/init.d/argo); then
-                        yellow "请在cloudflared里也对应修改端口为：${purple}${new_port}${re}\n"
-                    fi
-
                     restart_singbox
                     green "\nvmess-argo端口已修改为：${purple}${new_port}${re}\n"
                     ;;                    
@@ -978,16 +1039,14 @@ change_config() {
         2)
             reading "\n请输入新的UUID: " new_uuid
             [ -z "$new_uuid" ] && new_uuid=$(cat /proc/sys/kernel/random/uuid)
-            sed -i -E '
-                s/"uuid": "([a-f0-9-]+)"/"uuid": "'"$new_uuid"'"/g;
-                s/"uuid": "([a-f0-9-]+)"$/\"uuid\": \"'$new_uuid'\"/g;
-                s/"password": "([a-f0-9-]+)"/"password": "'"$new_uuid"'"/g
-            ' $config_dir
-
+            jq --arg uuid "$new_uuid" \
+               '(.inbounds[] | select(.users != null) | .users[] | select(.uuid != null).uuid) = $uuid |
+                (.inbounds[] | select(.users != null) | .users[] | select(.password != null).password) = $uuid' \
+               "${conf_dir}/inbounds.json" > "${conf_dir}/inbounds.json.tmp" && mv "${conf_dir}/inbounds.json.tmp" "${conf_dir}/inbounds.json"
             restart_singbox
             sed -i -E 's/(vless:\/\/|hysteria2:\/\/)[^@]*(@.*)/\1'"$new_uuid"'\2/' $client_dir
-            sed -i "s/tuic:\/\/[0-9a-f\-]\{36\}/tuic:\/\/$new_uuid/" /etc/sing-box/url.txt
-            isp=$(curl -s https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18}' | sed -e 's/ /_/g')
+            sed -i -E "s#tuic://[0-9a-f-]{36}:[0-9a-f-]{36}@#tuic://$new_uuid:$new_uuid@#g" /etc/sing-box/url.txt
+            isp=$(curl -sm 3 -H "User-Agent: Mozilla/5.0" "https://api.ip.sb/geoip" | tr -d '\n' | awk -F\" '{c="";i="";for(x=1;x<=NF;x++){if($x=="country_code")c=$(x+2);if($x=="isp")i=$(x+2)};if(c&&i)print c"-"i}' | sed 's/ /_/g' || curl -sm 3 -H "User-Agent: Mozilla/5.0" "https://ipapi.co/json" | tr -d '\n' | awk -F\" '{c="";o="";for(x=1;x<=NF;x++){if($x=="country_code")c=$(x+2);if($x=="org")o=$(x+2)};if(c&&o)print c"-"o}' | sed 's/ /_/g' || echo "$hostname")
             argodomain=$(grep -oE 'https://[[:alnum:]+\.-]+\.trycloudflare\.com' "${work_dir}/argo.log" | sed 's@https://@@')
             VMESS="{ \"v\": \"2\", \"ps\": \"${isp}\", \"add\": \"www.visa.com.tw\", \"port\": \"443\", \"id\": \"${new_uuid}\", \"aid\": \"0\", \"scy\": \"none\", \"net\": \"ws\", \"type\": \"none\", \"host\": \"${argodomain}\", \"path\": \"/vmess-argo?ed=2560\", \"tls\": \"tls\", \"sni\": \"${argodomain}\", \"alpn\": \"\", \"fp\": \"\", \"allowlnsecure\": \"flase\"}"
             encoded_vmess=$(echo "$VMESS" | base64 -w0)
@@ -1015,10 +1074,10 @@ change_config() {
                 else
                     new_sni="$new_sni"
                 fi
-                jq --arg new_sni "$new_sni" '
-                (.inbounds[] | select(.type == "vless") | .tls.server_name) = $new_sni |
-                (.inbounds[] | select(.type == "vless") | .tls.reality.handshake.server) = $new_sni
-                ' "$config_dir" > "$config_file.tmp" && mv "$config_file.tmp" "$config_dir"
+                jq --arg sni "$new_sni" \
+                   '(.inbounds[] | select(.type == "vless") | .tls.server_name) = $sni |
+                    (.inbounds[] | select(.type == "vless") | .tls.reality.handshake.server) = $sni' \
+                   "${conf_dir}/inbounds.json" > "${conf_dir}/inbounds.json.tmp" && mv "${conf_dir}/inbounds.json.tmp" "${conf_dir}/inbounds.json"
                 restart_singbox
                 sed -i "s/\(vless:\/\/[^\?]*\?\([^\&]*\&\)*sni=\)[^&]*/\1$new_sni/" $client_dir
                 base64 -w0 $client_dir > /etc/sing-box/sub.txt
@@ -1035,7 +1094,7 @@ change_config() {
             [ -z "$max_port" ] && max_port=$(($min_port + 100)) 
             yellow "你的结束端口为：$max_port\n"
             purple "正在安装依赖，并设置端口跳跃规则中，请稍等...\n"
-            listen_port=$(sed -n '/"tag": "hysteria2"/,/}/s/.*"listen_port": \([0-9]*\).*/\1/p' $config_dir)
+            listen_port=$(jq -r '.inbounds[] | select(.type == "hysteria2").listen_port' "${conf_dir}/inbounds.json")
             iptables -t nat -A PREROUTING -p udp --dport $min_port:$max_port -j DNAT --to-destination :$listen_port > /dev/null
             command -v ip6tables &> /dev/null && ip6tables -t nat -A PREROUTING -p udp --dport $min_port:$max_port -j DNAT --to-destination :$listen_port > /dev/null
             if command_exists rc-service 2>/dev/null; then
@@ -1071,7 +1130,7 @@ EOF
             ip=$(get_realip)
             uuid=$(sed -n 's/.*hysteria2:\/\/\([^@]*\)@.*/\1/p' $client_dir)
             line_number=$(grep -n 'hysteria2://' $client_dir | cut -d':' -f1)
-            isp=$(curl -s --max-time 2 https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18}' | sed -e 's/ /_/g' || echo "vps")
+            isp=$(curl -sm 3 -H "User-Agent: Mozilla/5.0" "https://api.ip.sb/geoip" | tr -d '\n' | awk -F\" '{c="";i="";for(x=1;x<=NF;x++){if($x=="country_code")c=$(x+2);if($x=="isp")i=$(x+2)};if(c&&i)print c"-"i}' | sed 's/ /_/g' || curl -sm 3 -H "User-Agent: Mozilla/5.0" "https://ipapi.co/json" | tr -d '\n' | awk -F\" '{c="";o="";for(x=1;x<=NF;x++){if($x=="country_code")c=$(x+2);if($x=="org")o=$(x+2)};if(c&&o)print c"-"o}' | sed 's/ /_/g' || echo "$hostname")
             sed -i.bak "/hysteria2:/d" $client_dir
             sed -i "${line_number}i hysteria2://$uuid@$ip:$listen_port?peer=www.bing.com&insecure=1&alpn=h3&obfs=none&mport=$listen_port,$min_port-$max_port#$isp" $client_dir
             base64 -w0 $client_dir > /etc/sing-box/sub.txt
@@ -1083,7 +1142,7 @@ EOF
             command -v ip6tables &> /dev/null && ip6tables -t nat -F PREROUTING  > /dev/null 2>&1
             if command_exists rc-service 2>/dev/null; then
                 rc-update del iptables default && rm -rf /etc/init.d/iptables 
-            elif [ -f /etc/redhat-release ]; then
+            elif [ -f /etc/debian_version ]; then
                 netfilter-persistent save > /dev/null 2>&1
             elif [ -f /etc/redhat-release ]; then
                 service iptables save > /dev/null 2>&1
@@ -1131,7 +1190,7 @@ disable_open_sub() {
                 if command_exists rc-service 2>/dev/null; then
                     rc-service nginx status | grep -q "started" && rc-service nginx stop || red "nginx not running"
                 else 
-                    [ "$(systemctl is-active nginx)" = "active" ] && systemctl stop nginx || red "ngixn not running"
+                    [ "$(systemctl is-active nginx)" = "active" ] && systemctl stop nginx || red "nginx not running"
                 fi
             else
                 yellow "Nginx is not installed"
@@ -1144,7 +1203,7 @@ disable_open_sub() {
             server_ip=$(get_realip)
             password=$(tr -dc A-Za-z < /dev/urandom | head -c 32) 
             sed -i "s|\(location = /\)[^ ]*|\1$password|" /etc/nginx/conf.d/sing-box.conf
-	    sub_port=$(port=$(grep -E 'listen [0-9]+;' "/etc/nginx/conf.d/sing-box.conf" | awk '{print $2}' | sed 's/;//'); if [ "$port" -eq 80 ]; then echo ""; else echo "$port"; fi)
+	        sub_port=$(port=$(grep -E 'listen [0-9]+;' "/etc/nginx/conf.d/sing-box.conf" | awk '{print $2}' | sed 's/;//'); if [ "$port" -eq 80 ]; then echo ""; else echo "$port"; fi)
             start_nginx
             (port=$(grep -E 'listen [0-9]+;' "/etc/nginx/conf.d/sing-box.conf" | awk '{print $2}' | sed 's/;//'); if [ "$port" -eq 80 ]; then echo ""; else green "订阅端口：$port"; fi); link=$(if [ -z "$sub_port" ]; then echo "http://$server_ip/$password"; else echo "http://$server_ip:$sub_port/$password"; fi); green "\n新的节点订阅链接：$link\n"
             ;; 
@@ -1153,7 +1212,6 @@ disable_open_sub() {
             reading "请输入新的订阅端口(1-65535):" sub_port
             [ -z "$sub_port" ] && sub_port=$(shuf -i 2000-65000 -n 1)
             
-            # 检查端口是否被占用
             until [[ -z $(lsof -iTCP:"$sub_port" -sTCP:LISTEN -t) ]]; do
                 if [[ -n $(lsof -iTCP:"$sub_port" -sTCP:LISTEN -t) ]]; then
                     echo -e "${red}端口 $sub_port 已经被其他程序占用，请更换端口重试${re}"
@@ -1162,23 +1220,18 @@ disable_open_sub() {
                 fi
             done
 
-            # 备份当前配置
             if [ -f "/etc/nginx/conf.d/sing-box.conf" ]; then
                 cp "/etc/nginx/conf.d/sing-box.conf" "/etc/nginx/conf.d/sing-box.conf.bak.$(date +%Y%m%d)"
             fi
             
-            # 更新端口配置
             sed -i 's/listen [0-9]\+;/listen '$sub_port';/g' "/etc/nginx/conf.d/sing-box.conf"
             sed -i 's/listen \[::\]:[0-9]\+;/listen [::]:'$sub_port';/g' "/etc/nginx/conf.d/sing-box.conf"
             path=$(sed -n 's|.*location = /\([^ ]*\).*|\1|p' "/etc/nginx/conf.d/sing-box.conf")
             server_ip=$(get_realip)
             
-            # 放行新端口
             allow_port $sub_port/tcp > /dev/null 2>&1
             
-            # 测试nginx配置
             if nginx -t > /dev/null 2>&1; then
-                # 尝试重新加载配置
                 if nginx -s reload > /dev/null 2>&1; then
                     green "nginx配置已重新加载，端口更换成功"
                 else
@@ -1204,7 +1257,6 @@ disable_open_sub() {
 
 # singbox 管理
 manage_singbox() {
-    # 检查sing-box状态
     local singbox_status=$(check_singbox 2>/dev/null)
     local singbox_installed=$?
     
@@ -1232,7 +1284,6 @@ manage_singbox() {
 
 # Argo 管理
 manage_argo() {
-    # 检查Argo状态
     local argo_status=$(check_argo 2>/dev/null)
     local argo_installed=$?
 
@@ -1460,6 +1511,324 @@ green "\nvmess节点优选域名已更新为：${purple}${cfip}:${cfport},${gree
 purple "$new_vmess_url\n"
 }
 
+# WARP 分流管理
+warp_manage() {
+    local singbox_status=$(check_singbox 2>/dev/null)
+    local singbox_installed=$?
+    if [ $singbox_installed -eq 2 ]; then
+        yellow "sing-box 尚未安装！"
+        sleep 1
+        menu
+        return
+    fi
+
+    clear
+    route_file="${conf_dir}/route.json"
+    outbound_file="${conf_dir}/outbounds.json"
+
+    echo ""
+    green "=== WARP 分流管理 ===\n"
+    green "当前已启用的分流规则集:"
+    jq -r '.route.rules[] | select(.rule_set != null) | .rule_set[]?' "$route_file" 2>/dev/null | sort -u | while read tag; do
+        echo -e " - ${skyblue}$tag${re}"
+    done || echo "  无"
+
+    green "\n已添加的socks/http代理出站:"
+    jq -r '.outbounds[] | select(.tag != "direct") | " - \(.tag) [\(.type)]" ' "$outbound_file" 2>/dev/null || echo "  无"
+
+    echo ""
+    green "1. 添加WARP分流规则"
+    skyblue "----------------------"
+    red "2. 删除WARP分流规则"
+    skyblue "--------------"
+    green "3. 添加 Socks5/HTTP 出站"
+    skyblue "----------------------"
+    red "4. 删除 Socks5/HTTP 出站"
+    skyblue "----------------------"
+    purple "0. 返回主菜单"
+    skyblue "------------"
+    purple "00. 退出脚本"
+    skyblue "------------"
+    reading "请输入选择: " choice
+    case "${choice}" in
+        1) add_rule_menu ;;
+        2) delete_rule_menu ;;
+        3) add_socks5_proxy ;;
+        4) delete_socks5_proxy ;;
+        0) menu ;;
+        00) exit 0 ;;
+        *) red "无效选项"; sleep 1; warp_manage ;;
+    esac
+}
+
+# 分流规则
+add_rule_menu() {
+    clear
+    green "选择要分流的服务:\n"
+    green "1. OpenAI"
+    green "2. Claude"
+    green "3. Gemini"
+    green "4. Google"
+    green "5. Tiktok"
+    green "6. Twitter"
+    green "7. YouTube"
+    green "8. Netflix"
+    green "9. Telegram\n"
+    purple "0. 返回上级菜单"
+    reading "请输入选择: " add_choice
+    case "$add_choice" in
+        1) rule_tag="openai";;
+        2) rule_tag="claude";;
+        3) rule_tag="gemini";;
+        4) rule_tag="google";;
+        5) rule_tag="tiktok";;
+        6) rule_tag="twitter";;
+        7) rule_tag="youtube";;
+        8) rule_tag="netflix";;
+        9) rule_tag="telegram";;
+        0) warp_manage; return;;
+        *) red "无效选项"; sleep 1; add_rule_menu; return;;
+    esac
+
+    # 检查是否已存在
+    if jq -e --arg tag "$rule_tag" '.route.rules[] | select(.rule_set != null) | .rule_set[]? | select(. == $tag)' "$route_file" > /dev/null 2>&1; then
+        yellow "规则集 '${rule_tag}' 已启用，无需重复添加。"
+        sleep 1
+        warp_manage
+        return
+    fi
+
+    # ---- 选择出站的核心逻辑 ----
+    local out_tags=($(jq -r '.outbounds[] | select(.tag != "direct") | .tag' "$outbound_file" 2>/dev/null))
+
+    if [ ${#out_tags[@]} -eq 0 ]; then
+        # 没有任何非 direct 出站，直接使用 wireguard-out，不修改 outbounds
+        selected_out="wireguard-out"
+        yellow "未找到其他出站，将自动使用 wireguard-out。"
+    else
+        # 列出已有出站供用户选择
+        echo ""
+        green "请选择分流流量要走的出站:"
+        for i in "${!out_tags[@]}"; do
+            echo -e "  ${green}$((i+1)). ${skyblue}${out_tags[$i]}${re}"
+        done
+        reading "请输入编号: " out_choice
+        if [[ ! "$out_choice" =~ ^[0-9]+$ ]] || [ "$out_choice" -lt 1 ] || [ "$out_choice" -gt "${#out_tags[@]}" ]; then
+            red "无效选择"
+            sleep 1
+            warp_manage
+            return
+        fi
+        selected_out="${out_tags[$((out_choice-1))]}"
+    fi
+
+    # ---- 将分流规则写入 route.json ----
+    jq --arg tag "$rule_tag" --arg out "$selected_out" \
+       'if (.route.rules | length) == 0 then
+            .route.rules = [{"rule_set": [$tag], "outbound": $out}]
+        else
+            if (.route.rules[0].outbound == $out) then
+                .route.rules[0].rule_set += [$tag]
+            else
+                .route.rules += [{"rule_set": [$tag], "outbound": $out}]
+            end
+        end' \
+       "$route_file" > "${route_file}.tmp" && mv "${route_file}.tmp" "$route_file"
+
+    restart_singbox
+    green "'${rule_tag}' 已分流至出站 '${selected_out}' 并重启生效。"
+    sleep 1
+    warp_manage
+}
+
+#  删除分流规则 
+delete_rule_menu() {
+    clear
+    green "当前已启用的分流规则集:"
+    jq -r '.route.rules[] | select(.rule_set != null) | .rule_set[]?' "$route_file" | nl -w2 -s'. '
+    reading "\n输入要删除的规则名称或序号: " del_input
+    if [[ "$del_input" =~ ^[0-9]+$ ]]; then
+        tag=$(jq -r --arg idx "$del_input" '[.route.rules[] | select(.rule_set != null) | .rule_set[]] | .[(($idx | tonumber) - 1)]' "$route_file")
+    else
+        tag="$del_input"
+    fi
+    if [ -z "$tag" ] || [ "$tag" == "null" ]; then
+        red "无效的选择"
+        sleep 1
+        warp_manage
+        return
+    fi
+
+    # 删除标签并清理空规则
+    jq --arg tag "$tag" \
+       'del(.route.rules[] | select(.rule_set != null) | .rule_set[] | select(. == $tag)) |
+        .route.rules = [.route.rules[] | select(.rule_set != null and (.rule_set | length) > 0)]' \
+       "$route_file" > "${route_file}.tmp" && mv "${route_file}.tmp" "$route_file"
+
+    restart_singbox
+    green "规则集 '${tag}' 已禁用并重启生效。"
+    sleep 1
+    warp_manage
+}
+
+
+# 添加socks/http代理 
+add_socks5_proxy() {
+    clear
+    reading "请输入代理URL (支持socks://,socks5://,http://,可直接使用v2rayN导出的链接): " proxy_url
+    [ -z "$proxy_url" ] && { red "输入为空！"; sleep 1; return; }
+
+    # 提取协议
+    proto=$(echo "$proxy_url" | grep -oP '^[a-zA-Z0-9]+(?=://)')
+    [[ ! "$proto" =~ ^(socks5|socks|http)$ ]] && { red "不支持的协议，仅支持 socks5/http"; sleep 2; return; }
+    case "$proto" in
+        socks|socks5) outbound_type="socks" ;;
+        http) outbound_type="http" ;;
+    esac
+
+    after_proto="${proxy_url#*://}"
+    # 提取 #tag
+    if [[ "$after_proto" == *"#"* ]]; then
+        tag_from_url="${after_proto##*#}"
+        after_proto="${after_proto%%#*}"
+    else
+        tag_from_url=""
+    fi
+
+    # ============== 关键解析：严格按照 -> user:password@host:port ==============
+    user=""
+    password=""
+    if [[ "$after_proto" == *"@"* ]]; then
+        user_pass="${after_proto%%@*}"      # // 到 @ 之前的部分
+        host_port="${after_proto##*@}"
+    else
+        user_pass=""
+        host_port="$after_proto"
+    fi
+
+    # 用户名和密码的处理（优先尝试 Base64 解码）
+    if [ -n "$user_pass" ]; then
+        # 尝试对整个 user_pass 做 Base64 解码
+        decoded=$(echo "$user_pass" | base64 -d 2>/dev/null)
+        if [ $? -eq 0 ] && [ -n "$decoded" ] && [[ ! "$decoded" =~ base64 ]] && [[ "$decoded" =~ ^[[:print:]]+$ ]]; then
+            # 解码成功：按第一个 ':' 分割
+            if [[ "$decoded" == *":"* ]]; then
+                user="${decoded%%:*}"
+                password="${decoded#*:}"
+            else
+                user="$decoded"
+                password=""
+            fi
+        else
+            # 解码失败，直接按原字符串 ':' 分割
+            if [[ "$user_pass" == *":"* ]]; then
+                user="${user_pass%%:*}"
+                password="${user_pass#*:}"
+            else
+                user="$user_pass"
+                password=""
+            fi
+        fi
+    fi
+
+    server="${host_port%%:*}"
+    port="${host_port##*:}"
+    [ -z "$server" ] || [ -z "$port" ] && { red "格式错误：缺少服务器或端口"; sleep 2; return; }
+
+    # ============== 代理检测 ==============
+    yellow "正在测试代理 ${proto}://${server}:${port} ..."
+    local proxy_auth=""
+    [ -n "$user" ] && proxy_auth="$user"
+    [ -n "$password" ] && proxy_auth="${proxy_auth}:${password}"
+    [ -n "$proxy_auth" ] && proxy_auth="${proxy_auth}@"
+
+    local api_response=$(curl -s --max-time 8 -G --data-urlencode "proxy=${proto}://${proxy_auth}${server}:${port}" "https://check.socks5.cmliussss.net/check" 2>/dev/null)
+    [ -z "$api_response" ] && { red "API 请求失败，请检查网络"; sleep 2; return; }
+
+    success=$(echo "$api_response" | jq -r '.success')
+    if [ "$success" != "true" ]; then
+        error_msg=$(echo "$api_response" | jq -r '.error // "未知错误"')
+        red "代理不可用: $error_msg"
+        sleep 2
+        return
+    fi
+    exit_ip=$(echo "$api_response" | jq -r '.exit.ip // empty')
+    green "代理可用"
+    [ -n "$exit_ip" ] && green "出口 IP: $exit_ip"
+
+    # ============== 出站标签 ==============
+    [ -n "$tag_from_url" ] && tag="$tag_from_url" || tag="${outbound_type}-${server}"
+    jq -e --arg tag "$tag" '.outbounds[] | select(.tag == $tag)' "$outbound_file" >/dev/null 2>&1 && { red "出站标签 '${tag}' 已存在"; sleep 2; return; }
+
+    # ============== 写入配置 ==============
+    jq --arg type "$outbound_type" \
+       --arg tag "$tag" \
+       --arg server "$server" \
+       --arg port "$port" \
+       --arg user "$user" \
+       --arg password "$password" \
+       '.outbounds += [{"type":$type, "tag":$tag, "server":$server, "server_port":($port|tonumber), "username":$user, "password":$password}]' \
+       "$outbound_file" > "${outbound_file}.tmp" && mv "${outbound_file}.tmp" "$outbound_file"
+
+    # 自动切换所有分流规则到该出站
+    if jq -e '.route.rules | length > 0' "$route_file" >/dev/null 2>&1; then
+        jq --arg tag "$tag" '.route.rules[].outbound = $tag' "$route_file" > "${route_file}.tmp" && mv "${route_file}.tmp" "$route_file"
+        yellow "已将现有分流规则出站切换为 '${tag}'。"
+    fi
+
+    restart_singbox
+    green "\n${tag}代理出站已生效\n"
+    sleep 2
+    warp_manage
+}
+
+# 删除代理
+delete_socks5_proxy() {
+    clear
+    green "当前可用出站列表:"
+    local out_list=$(jq -r '[.outbounds[] | select(.tag != "direct")] | to_entries | .[] | "\(.key+1). \(.value.tag) [\(.value.type)]"' "$outbound_file" 2>/dev/null)
+    if [ -z "$out_list" ]; then
+        yellow "没有可删除的出站。"
+        sleep 2
+        return
+    fi
+    echo "$out_list"
+
+    reading "输入要删除的出站编号或标签: " del_input
+    if [[ "$del_input" =~ ^[0-9]+$ ]]; then
+        # 通过编号获取出站标签
+        tag=$(jq -r --arg idx "$del_input" '.outbounds | map(select(.tag != "direct")) | .[($idx | tonumber)-1].tag // empty' "$outbound_file")
+        if [ -z "$tag" ]; then
+            red "编号无效！"
+            sleep 1
+            return
+        fi
+    else
+        tag="$del_input"
+        # 验证标签是否存在
+        if ! jq -e --arg tag "$tag" '.outbounds[] | select(.tag == $tag)' "$outbound_file" > /dev/null 2>&1; then
+            red "标签 '${tag}' 不存在！"
+            sleep 1
+            return
+        fi
+    fi
+
+    if [ "$tag" == "wireguard-out" ]; then
+        red "wireguard-out 为系统内置，不可删除！"
+        sleep 2
+        return
+    fi
+
+    # 删除出站
+    jq --arg tag "$tag" 'del(.outbounds[] | select(.tag == $tag))' "$outbound_file" > "${outbound_file}.tmp" && mv "${outbound_file}.tmp" "$outbound_file"
+    jq --arg tag "$tag" '.route.rules = [.route.rules[] | select(.outbound != $tag)]' "$route_file" > "${route_file}.tmp" && mv "${route_file}.tmp" "$route_file"
+
+    restart_singbox
+    green "${tag}代理出站已删除，相关路由规则已清理。"
+    sleep 1
+    return
+}
+
 # 主菜单
 menu() {
    singbox_status=$(check_singbox 2>/dev/null)
@@ -1480,13 +1849,14 @@ menu() {
    echo "==============="
    green "3. sing-box管理"
    green "4. Argo隧道管理"
-   echo  "==============="
-   green  "5. 查看节点信息"
-   green  "6. 修改节点配置"
-   green  "7. 管理节点订阅"
-   echo  "==============="
-   purple "8. ssh综合工具箱"
-   echo  "==============="
+   echo "==============="
+   green "5. 查看节点信息"
+   green "6. 修改节点配置"
+   green "7. 管理节点订阅"
+   green "8. WARP分流管理"  
+   echo "==============="
+   purple "9. ssh综合工具箱"
+   echo "==============="
    red "0. 退出脚本"
    echo "==========="
    reading "请输入选择(0-9): " choice
@@ -1494,7 +1864,7 @@ menu() {
 }
 
 # 捕获 Ctrl+C 退出信号
-trap 'red "已取消操作"; exit' INT
+trap 'red "\n强制退出"; exit' INT
 
 # 主循环
 while true; do
@@ -1531,12 +1901,13 @@ while true; do
         5) check_nodes ;;
         6) change_config ;;
         7) disable_open_sub ;;
-        8) 
+        8) warp_manage ;;
+        9) 
            clear
            bash <(curl -Ls ssh_tool.eooce.com)
            ;;           
         0) exit 0 ;;
-        *) red "无效的选项，请输入 0 到 8" ;;
+        *) red "无效的选项，请输入 0 到 9" ;;
    esac
    read -n 1 -s -r -p $'\033[1;91m按任意键返回...\033[0m'
 done
