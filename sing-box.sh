@@ -208,7 +208,7 @@ install_singbox() {
     # 判断系统架构
     ARCH_RAW=$(uname -m)
     case "${ARCH_RAW}" in
-        'x86_64') ARCH='amd64' ;;
+        'x86_64' | 'amd64') ARCH='amd64' ;;
         'x86' | 'i686' | 'i386') ARCH='386' ;;
         'aarch64' | 'arm64') ARCH='arm64' ;;
         'armv7l') ARCH='armv7' ;;
@@ -477,8 +477,7 @@ EOF
     ],
     "rules": [
       {
-        "rule_set": [],
-        "outbound": "wireguard-out"
+        "rule_set": []
       }
     ],
     "final": "direct"
@@ -1671,7 +1670,6 @@ delete_rule_menu() {
     warp_manage
 }
 
-
 # 添加socks/http代理 
 add_socks5_proxy() {
     clear
@@ -1695,32 +1693,23 @@ add_socks5_proxy() {
         tag_from_url=""
     fi
 
-    # ============== 关键解析：严格按照 -> user:password@host:port ==============
-    user=""
-    password=""
+    # 解析用户名密码
     if [[ "$after_proto" == *"@"* ]]; then
-        user_pass="${after_proto%%@*}"      # // 到 @ 之前的部分
+        user_pass="${after_proto%%@*}"
         host_port="${after_proto##*@}"
     else
         user_pass=""
         host_port="$after_proto"
     fi
 
-    # 用户名和密码的处理（优先尝试 Base64 解码）
+    user=""
+    password=""
     if [ -n "$user_pass" ]; then
-        # 尝试对整个 user_pass 做 Base64 解码
         decoded=$(echo "$user_pass" | base64 -d 2>/dev/null)
-        if [ $? -eq 0 ] && [ -n "$decoded" ] && [[ ! "$decoded" =~ base64 ]] && [[ "$decoded" =~ ^[[:print:]]+$ ]]; then
-            # 解码成功：按第一个 ':' 分割
-            if [[ "$decoded" == *":"* ]]; then
-                user="${decoded%%:*}"
-                password="${decoded#*:}"
-            else
-                user="$decoded"
-                password=""
-            fi
+        if [ -n "$decoded" ] && [[ "$decoded" != "$user_pass" ]] && [[ "$decoded" == *":"* ]]; then
+            user="${decoded%%:*}"
+            password="${decoded#*:}"
         else
-            # 解码失败，直接按原字符串 ':' 分割
             if [[ "$user_pass" == *":"* ]]; then
                 user="${user_pass%%:*}"
                 password="${user_pass#*:}"
@@ -1733,16 +1722,24 @@ add_socks5_proxy() {
 
     server="${host_port%%:*}"
     port="${host_port##*:}"
-    [ -z "$server" ] || [ -z "$port" ] && { red "格式错误：缺少服务器或端口"; sleep 2; return; }
+    [ -z "$server" ] || [ -z "$port" ] && { red "格式错误：缺少ip或端口"; sleep 2; return; }
 
-    # ============== 代理检测 ==============
-    yellow "正在测试代理 ${proto}://${server}:${port} ..."
+    # 检测时代理协议映射 (API 要求 socks5)
+    if [[ "$proto" == "socks" || "$proto" == "socks5" ]]; then
+        check_proto="socks5"
+    else
+        check_proto="$proto"
+    fi
+
+    yellow "正在测试代理 ${check_proto}://${server}:${port} ..."
     local proxy_auth=""
-    [ -n "$user" ] && proxy_auth="$user"
-    [ -n "$password" ] && proxy_auth="${proxy_auth}:${password}"
-    [ -n "$proxy_auth" ] && proxy_auth="${proxy_auth}@"
+    if [ -n "$user" ] && [ -n "$password" ]; then
+        proxy_auth="${user}:${password}@"
+    elif [ -n "$user" ]; then
+        proxy_auth="${user}@"
+    fi
 
-    local api_response=$(curl -s --max-time 8 -G --data-urlencode "proxy=${proto}://${proxy_auth}${server}:${port}" "https://check.socks5.cmliussss.net/check" 2>/dev/null)
+    local api_response=$(curl -s --max-time 8 -G --data-urlencode "proxy=${check_proto}://${proxy_auth}${server}:${port}" "https://check.socks5.cmliussss.net/check" 2>/dev/null)
     [ -z "$api_response" ] && { red "API 请求失败，请检查网络"; sleep 2; return; }
 
     success=$(echo "$api_response" | jq -r '.success')
@@ -1756,11 +1753,11 @@ add_socks5_proxy() {
     green "代理可用"
     [ -n "$exit_ip" ] && green "出口 IP: $exit_ip"
 
-    # ============== 出站标签 ==============
+    # 出站标签
     [ -n "$tag_from_url" ] && tag="$tag_from_url" || tag="${outbound_type}-${server}"
     jq -e --arg tag "$tag" '.outbounds[] | select(.tag == $tag)' "$outbound_file" >/dev/null 2>&1 && { red "出站标签 '${tag}' 已存在"; sleep 2; return; }
 
-    # ============== 写入配置 ==============
+    # 写入配置
     jq --arg type "$outbound_type" \
        --arg tag "$tag" \
        --arg server "$server" \
@@ -1770,14 +1767,14 @@ add_socks5_proxy() {
        '.outbounds += [{"type":$type, "tag":$tag, "server":$server, "server_port":($port|tonumber), "username":$user, "password":$password}]' \
        "$outbound_file" > "${outbound_file}.tmp" && mv "${outbound_file}.tmp" "$outbound_file"
 
-    # 自动切换所有分流规则到该出站
+    # 自动切换路由
     if jq -e '.route.rules | length > 0' "$route_file" >/dev/null 2>&1; then
         jq --arg tag "$tag" '.route.rules[].outbound = $tag' "$route_file" > "${route_file}.tmp" && mv "${route_file}.tmp" "$route_file"
         yellow "已将现有分流规则出站切换为 '${tag}'。"
     fi
 
     restart_singbox
-    green "\n${tag}代理出站已生效\n"
+    green "\n${tag}代理出站添加, 你可以去 “添加WARP分流规则” 菜单设置需要分流的服务了\n"
     sleep 2
     warp_manage
 }
