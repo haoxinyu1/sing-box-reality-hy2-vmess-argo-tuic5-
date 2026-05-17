@@ -3,7 +3,7 @@
 # =========================
 # 老王sing-box四合一安装脚本
 # vless-version-reality|vmess-ws-tls(tunnel)|hysteria2|tuic5
-# 最后更新时间: 2026.5.12
+# 最后更新时间: 2026.5.16
 # =========================
 
 export LANG=en_US.UTF-8
@@ -1597,15 +1597,15 @@ add_rule_menu() {
         return
     fi
 
-    # ---- 选择出站的核心逻辑 ----
-    local out_tags=($(jq -r '.outbounds[] | select(.tag != "direct") | .tag' "$outbound_file" 2>/dev/null))
+    # 移除默认的空规则集（如果存在）
+    jq 'if (.route.rules | length) == 1 and (.route.rules[0].rule_set | length) == 0 then .route.rules = [] else . end' "$route_file" > "${route_file}.tmp" && mv "${route_file}.tmp" "$route_file"
 
+    # 选择出站
+    local out_tags=($(jq -r '.outbounds[] | select(.tag != "direct") | .tag' "$outbound_file" 2>/dev/null))
     if [ ${#out_tags[@]} -eq 0 ]; then
-        # 没有任何非 direct 出站，直接使用 wireguard-out，不修改 outbounds
         selected_out="wireguard-out"
         yellow "未找到其他出站，将自动使用 wireguard-out。"
     else
-        # 列出已有出站供用户选择
         echo ""
         green "请选择分流流量要走的出站:"
         for i in "${!out_tags[@]}"; do
@@ -1621,21 +1621,22 @@ add_rule_menu() {
         selected_out="${out_tags[$((out_choice-1))]}"
     fi
 
-    # ---- 将分流规则写入 route.json ----
-    jq --arg tag "$rule_tag" --arg out "$selected_out" \
-       'if (.route.rules | length) == 0 then
+    # 将标签添加到同名出站的 rule_set 中，若不存在则新建
+    jq --arg tag "$rule_tag" --arg out "$selected_out" '
+        if (.route.rules | length) == 0 then
             .route.rules = [{"rule_set": [$tag], "outbound": $out}]
         else
-            if (.route.rules[0].outbound == $out) then
-                .route.rules[0].rule_set += [$tag]
-            else
+            (first(.route.rules[] | select(.outbound == $out)) | .rule_set) as $existing
+            | if $existing then
+                .route.rules = [.route.rules[] | select(.outbound == $out).rule_set += [$tag]]
+              else
                 .route.rules += [{"rule_set": [$tag], "outbound": $out}]
-            end
-        end' \
-       "$route_file" > "${route_file}.tmp" && mv "${route_file}.tmp" "$route_file"
+              end
+        end
+    ' "$route_file" > "${route_file}.tmp" && mv "${route_file}.tmp" "$route_file"
 
     restart_singbox
-    green "'${rule_tag}' 已分流至出站 '${selected_out}' 并重启生效。"
+    green "'${rule_tag}' 已分流至出站 '${selected_out}' "
     sleep 1
     warp_manage
 }
