@@ -33,6 +33,7 @@ const config = {
   UPLOAD_URL: process.env.UPLOAD_URL || '',           // 节点上传地址，需部署merge-sub订阅器项目，例如：https://merge.xxx.com
   FILE_PATH: process.env.FILE_PATH || '.npm',         // sub.txt节点存放目录
   DISABLE_ARGO: process.env.DISABLE_ARGO || 'false',  // 是否禁用argo, true为禁用,false为不禁用,默认开启
+  SHOW_LOG: process.env.SHOW_LOG || 'true',  // 是否禁用日志, true或yes为启用,false或no为禁用,默认显示
 };
 
 function log(message, type = 'INFO') {
@@ -60,7 +61,7 @@ function getArchitecture() {
 
 function downloadFile(url, destPath) {
   return new Promise((resolve, reject) => {
-    log(`Downloading: ${url}`);
+    // log(`Downloading: ${url}`);
     
     const file = fs.createWriteStream(destPath);
     
@@ -196,7 +197,7 @@ async function main() {
     });
     
     log(`🌐 HTTP: http://localhost:${PORT}`);
-    log(`📁 Sub: http://localhost:${PORT}/${SUB_PATH}`);
+    // log(`📁 Sub: http://localhost:${PORT}/${SUB_PATH}`);
     
     process.on('SIGINT', () => {
       log('Shutting down...');

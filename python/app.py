@@ -40,6 +40,7 @@ config = {
     'UPLOAD_URL': os.environ.get('UPLOAD_URL', ''),           # 节点上传地址，需部署merge-sub订阅器项目，例如：https://merge.xxx.com
     'FILE_PATH': os.environ.get('FILE_PATH', '.cache'),       # sub,.txt节点存放目录
     'DISABLE_ARGO': os.environ.get('DISABLE_ARGO', 'false'),  # 是否禁用argo, true为禁用,false为不禁用,默认开启
+    'SHOW_LOG': os.environ.get('SHOW_LOG', 'true'),  # 是否显示日志, true或yes显示用,false或no禁用,默认显示
 }
 
 def sleep(ms):
@@ -59,7 +60,7 @@ def get_architecture():
     raise Exception(f"Unsupported architecture: {system} {arch}")
 
 def download_file(url, dest_path):
-    print(f"Downloading from: {url}")
+    # print(f"Downloading from: {url}")
     opener = urllib.request.build_opener()
     opener.addheaders = [
         ('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'),
@@ -230,7 +231,7 @@ def main():
         log_thread.start()
         
         sleep(18000)
-        print('\nLogs will be deleted in 90 seconds, you can copy the above nodes!')
+        # print('\nLogs will be deleted in 90 seconds, you can copy the above nodes!')
         
         sleep(90000)
         
